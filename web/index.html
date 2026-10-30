@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>登録者数</title>
+<style>
+  body { margin: 0; font: 700 96px sans-serif; color: #fff; background: #222; }
+</style>
+</head>
+<body>
+<div id="count"></div>
+<script>
+  const el = document.getElementById("count");
+  // 取得に失敗してもサーバーは前回の値を送るので、画面にエラーは出さない。
+  // 接続が切れた場合は EventSource が自動で再接続する。
+  new EventSource("/events").onmessage = (e) => {
+    const { count } = JSON.parse(e.data);
+    if (count !== null) el.textContent = count;
+  };
+</script>
+</body>
+</html>

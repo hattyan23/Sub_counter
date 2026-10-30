@@ -1,0 +1,16 @@
+# 認証情報が入っているので絶対にコミットしない
+chrome_profile/
+
+# 調査用の出力
+dumps/
+watch_*.csv
+*.log
+
+build/
+dist/
+*.spec
+.venv-build/
+
+__pycache__/
+*.pyc
+.venv/
