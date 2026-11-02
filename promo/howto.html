@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>登録者数カウンター 使い方解説</title>
+<style>
+  :root { --blue: #2563eb; --zunda: #7ac943; --red: #e53935; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0b1020; }
+  body { font-family: "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", sans-serif; color: #fff; }
+  .bg { position: absolute; inset: 0; background:
+          radial-gradient(900px 600px at 15% 20%, rgba(37,99,235,.40), transparent 60%),
+          radial-gradient(800px 600px at 85% 80%, rgba(122,201,67,.25), transparent 60%),
+          linear-gradient(160deg, #0b1020, #111a3a 60%, #0b1020); }
+
+  .scene { position: absolute; inset: 0; opacity: 0; transition: opacity .5s ease; pointer-events: none; }
+  .scene.on { opacity: 1; }
+  .center { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .kicker { font-size: 40px; font-weight: 700; color: #cbd5ff; letter-spacing: .08em; }
+  .title { font-size: 120px; font-weight: 800; line-height: 1.2; margin: 10px 0 34px; text-shadow: 0 8px 40px rgba(37,99,235,.6); }
+  .toc { display: grid; grid-template-columns: repeat(5, auto); gap: 18px; }
+  .toc span { font-size: 32px; font-weight: 700; padding: 10px 26px; border-radius: 14px; background: rgba(255,255,255,.1);
+              border: 2px solid rgba(255,255,255,.25); }
+
+  /* 章の見出し（左上） */
+  .chapter { position: absolute; left: 40px; top: 30px; font-size: 34px; font-weight: 800; padding: 8px 26px; border-radius: 999px;
+             background: var(--blue); box-shadow: 0 6px 20px rgba(0,0,0,.4); transition: opacity .3s; }
+  .chapter:empty { opacity: 0; }
+  .note-img { position: absolute; right: 40px; top: 36px; font-size: 22px; color: #cbd5ff; background: rgba(0,0,0,.35);
+              padding: 4px 14px; border-radius: 8px; }
+
+  /* 1. ダウンロードと起動 */
+  .cards3 { position: absolute; left: 120px; right: 120px; top: 150px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
+  .card { background: #fff; color: #1d2026; border-radius: 22px; padding: 26px; height: 560px; box-sizing: border-box;
+          opacity: .25; transform: scale(.96); transition: all .5s; display: flex; flex-direction: column; }
+  .card.on { opacity: 1; transform: none; box-shadow: 0 0 0 6px var(--zunda), 0 20px 50px rgba(0,0,0,.5); }
+  .card h3 { margin: 0 0 18px; font-size: 36px; }
+  .card h3 b { display: inline-flex; width: 52px; height: 52px; border-radius: 50%; background: var(--red); color: #fff;
+               align-items: center; justify-content: center; margin-right: 12px; font-size: 30px; }
+  .menu { border: 1px solid #c9ced6; background: #fafbfc; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.18);
+          padding: 6px 0; font-size: 28px; width: 300px; }
+  .menu div { padding: 6px 22px; }
+  .hl { outline: 5px solid var(--red); outline-offset: 2px; border-radius: 6px; background: #e8efff; }
+  .smart { background: #0067b8; color: #fff; border-radius: 12px; padding: 26px; font-size: 24px; flex: 1; }
+  .smart .big { font-size: 34px; font-weight: 800; margin-bottom: 12px; }
+  .smart u { display: inline-block; margin-top: 18px; outline: 5px solid #ffd54f; outline-offset: 4px; border-radius: 4px; }
+  .smart .btns { display: flex; gap: 14px; justify-content: flex-end; margin-top: 80px; }
+  .smart .btns span { border: 2px solid #fff; padding: 6px 26px; }
+  .smart .btns span:first-child { outline: 5px solid #ffd54f; outline-offset: 4px; }
+  .card img { width: 100%; border-radius: 12px; }
+  .tag { font-size: 20px; color: #5d6470; margin-top: auto; }
+
+  /* 本物の画面を入れるウィンドウ */
+  .window { position: absolute; border-radius: 14px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.6); background: #f5f6f8; }
+  .window .bar { height: 46px; background: #e2e5ea; display: flex; align-items: center; gap: 10px; padding: 0 16px; color: #555; font-size: 20px; }
+  .window .bar i { width: 14px; height: 14px; border-radius: 50%; background: #c3c8d0; }
+  .window .bar span { margin-left: 14px; }
+  .window iframe { border: 0; display: block; }
+
+  /* OBS のイメージ */
+  .obs { position: absolute; left: 120px; top: 120px; width: 1680px; height: 760px; background: #272a33; border-radius: 16px;
+         box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  .obs .canvas { position: absolute; left: 30px; top: 30px; width: 1100px; height: 619px; overflow: hidden; border-radius: 6px;
+                 background: linear-gradient(#1e3a8a, #0e7490 55%, #14532d 55%, #052e16); }
+  .obs .canvas .sun { position: absolute; left: 120px; top: 80px; width: 130px; height: 130px; border-radius: 50%;
+                      background: radial-gradient(#fde68a, #f59e0b); box-shadow: 0 0 90px #f59e0b; }
+  .obs .canvas .hill { position: absolute; bottom: 0; width: 700px; height: 320px; background: #166534; border-radius: 50% 50% 0 0; }
+  .obs .canvas .hill.b { left: 520px; width: 760px; height: 250px; background: #15803d; }
+  .obs .canvas .src { position: absolute; right: 24px; top: 20px; width: 480px; height: 270px; opacity: 0; transition: opacity .5s; }
+  .obs .canvas .src.on { opacity: 1; outline: 4px solid var(--red); }
+  .obs .canvas iframe { width: 100%; height: 100%; border: 0; }
+  .obs .panel { position: absolute; background: #1f2129; border-radius: 8px; padding: 14px 18px; font-size: 26px; color: #dfe3ea; }
+  .obs .sources { left: 30px; top: 670px; width: 520px; height: 64px; display: flex; align-items: center; gap: 22px; padding-top: 6px; }
+  .obs .sources b { margin-right: auto; }
+  .obs .plus { font-size: 34px; font-weight: 800; padding: 0 12px; border-radius: 6px; }
+  .obs .add { left: 1160px; top: 30px; width: 440px; opacity: 0; transition: opacity .3s; }
+  .obs .add div { padding: 8px 14px; border-radius: 6px; }
+  .obs .add div.sel { background: #4a5ae8; }
+  .obs .props { left: 1160px; top: 330px; width: 440px; opacity: 0; transition: opacity .3s; }
+  .obs .props .field { margin-top: 12px; background: #12141a; border: 2px solid #4b5060; border-radius: 6px; padding: 8px 12px;
+                       font-family: Consolas, monospace; font-size: 24px; min-height: 30px; }
+  .obs .props .ok { margin-top: 18px; text-align: right; }
+  .obs .props .ok span { display: inline-block; background: #3a3e4b; padding: 6px 30px; border-radius: 6px; }
+  .on-show { opacity: 1 !important; }
+
+  /* 毎回の使い方 */
+  .daily { position: absolute; left: 160px; top: 170px; display: grid; grid-template-columns: 560px 1fr; gap: 70px; width: 1600px; }
+  .tray-menu { background: #fafbfc; color: #1d2026; border-radius: 14px; padding: 12px 0; font-size: 34px; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .tray-menu div { padding: 10px 34px; transition: background .3s; }
+  .tray-menu .dim { color: #8b919b; }
+  .tray-menu .now { background: #dbe7ff; outline: 5px solid var(--red); outline-offset: -5px; }
+  .tips div { font-size: 40px; font-weight: 700; margin-bottom: 30px; padding: 26px 34px; border-radius: 18px;
+              background: rgba(255,255,255,.08); border-left: 10px solid rgba(255,255,255,.2); opacity: .35; transition: all .4s; }
+  .tips div.on { opacity: 1; border-left-color: var(--zunda); background: rgba(122,201,67,.15); }
+
+  /* カーソルとクリックの波紋 */
+  #cursor { position: absolute; left: 960px; top: 1200px; width: 46px; height: 46px; z-index: 50; pointer-events: none;
+            transition: left .7s cubic-bezier(.3,.7,.2,1), top .7s cubic-bezier(.3,.7,.2,1); filter: drop-shadow(0 3px 4px rgba(0,0,0,.5)); }
+  .ripple { position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; border: 5px solid #facc15;
+            z-index: 49; animation: ripple .6s ease-out forwards; pointer-events: none; }
+  @keyframes ripple { to { transform: scale(4); opacity: 0; } }
+
+  .caption { position: absolute; left: 0; right: 0; bottom: 34px; margin: 0 auto; width: fit-content; min-width: 900px; max-width: 1820px;
+             box-sizing: border-box; display: flex; align-items: center; gap: 22px; background: rgba(10, 20, 10, .86);
+             border: 4px solid var(--zunda); border-radius: 26px; padding: 16px 38px; z-index: 40; }
+  .caption .who { flex: none; font-size: 28px; font-weight: 800; background: var(--zunda); color: #10230a; padding: 4px 18px; border-radius: 10px; }
+  .caption .line { font-size: 42px; font-weight: 800; white-space: nowrap; }
+  .caption:empty, .nocap .caption { display: none; }
+  .credit { position: absolute; right: 30px; bottom: 6px; font-size: 20px; color: rgba(255,255,255,.55); z-index: 41; }
+  .nocap .credit { display: none; }
+</style>
+</head>
+<body>
+<div class="bg"></div>
+
+<section class="scene center" id="s-intro">
+  <div class="kicker">登録者数カウンター</div>
+  <div class="title">使い方ガイド</div>
+  <div class="toc"><span>1. 起動</span><span>2. 初期設定</span><span>3. OBS に追加</span><span>4. 見た目</span><span>5. 毎回の使い方</span></div>
+</section>
+
+<section class="scene" id="s-start">
+  <div class="note-img">イメージ図（実際の画面とは少し違います）</div>
+  <div class="cards3">
+    <div class="card" id="c-zip"><h3><b>1</b>zip を展開</h3>
+      <div style="display:flex;align-items:center;gap:16px;font-size:30px;font-weight:700">
+        <span style="width:54px;height:66px;border-radius:6px;background:#f3c443;color:#5b4300;font-size:16px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px">ZIP</span>SubCounter.zip</div>
+      <div class="menu" style="margin:22px 0 0 60px"><div>開く</div><div class="hl">すべて展開...</div><div>コピー</div><div>削除</div></div>
+      <div class="tag">右クリック →「すべて展開」</div></div>
+    <div class="card" id="c-smart"><h3><b>2</b>exe を起動</h3>
+      <div class="smart"><div class="big">Windows によって PC が保護されました</div>
+        <div>Microsoft Defender SmartScreen は認識されないアプリの起動を停止しました。</div>
+        <u>詳細情報</u><div class="btns"><span>実行</span><span>実行しない</span></div></div>
+      <div class="tag" style="margin-top:14px">出たときだけ「詳細情報」→「実行」</div></div>
+    <div class="card" id="c-tray"><h3><b>3</b>アイコンを確認</h3>
+      <img src="/assets/tray.png" alt="">
+      <div class="tag">画面右下の「^」→ 青い棒グラフのアイコン</div></div>
+  </div>
+</section>
+
+<section class="scene" id="s-setup">
+  <div class="window" style="left:466px;top:100px;width:760px;height:646px;transform:scale(1.3);transform-origin:0 0">
+    <div class="bar"><i></i><i></i><i></i><span>初期設定 - 登録者数カウンター</span></div>
+    <iframe id="f-setup" style="width:760px;height:600px"></iframe></div>
+</section>
+
+<section class="scene" id="s-obs">
+  <div class="note-img">OBS の画面はイメージ図です</div>
+  <div class="obs">
+    <div class="canvas"><div class="sun"></div><div class="hill"></div><div class="hill b"></div>
+      <div class="src" id="obs-src"><iframe id="f-obs" title="カウンター"></iframe></div></div>
+    <div class="panel sources"><b>ソース</b><span class="plus" id="obs-plus">＋</span><span>－</span><span>⚙</span></div>
+    <div class="panel add" id="obs-add"><div>画像</div><div>テキスト (GDI+)</div><div id="obs-browser">ブラウザ</div><div>映像キャプチャデバイス</div></div>
+    <div class="panel props" id="obs-props"><b>プロパティ「登録者数」</b>
+      <div class="field" id="obs-url"></div>
+      <div class="ok"><span id="obs-ok">OK</span></div></div>
+  </div>
+</section>
+
+<section class="scene" id="s-design">
+  <div class="window" style="left:40px;top:110px;width:1280px;height:860px">
+    <div class="bar"><i></i><i></i><i></i><span>見た目の設定 - 登録者数カウンター</span></div>
+    <iframe id="f-design" style="width:1280px;height:814px"></iframe></div>
+  <div style="position:absolute;left:1350px;top:120px;font-size:28px;font-weight:800">OBS の画面</div>
+  <div class="window" style="left:1350px;top:170px;width:530px;height:298px;background:#0e7490">
+    <iframe id="f-design-obs" style="width:530px;height:298px;background:linear-gradient(#1e3a8a,#0e7490 55%,#14532d 55%)"></iframe></div>
+  <div style="position:absolute;left:1350px;top:490px;width:530px;font-size:26px;line-height:1.6;color:#cbd5ff">
+    「保存して OBS に反映」を押すまでは、配信の画面は変わりません。</div>
+</section>
+
+<section class="scene" id="s-daily">
+  <div class="daily">
+    <div class="tray-menu" id="tray-menu">
+      <div class="dim">登録者数: 1250</div><div>OBS 用の URL をコピー</div><div>見た目を変える</div><div>設定を開く</div>
+      <div>今すぐ取得し直す</div><div>ログを開く</div><div>利用規約とプライバシー ›</div><div>終了</div></div>
+    <div class="tips" id="tips">
+      <div>配信の前に SubCounter.exe を起動</div>
+      <div>終わったらアイコンを右クリック →「終了」</div>
+      <div>困ったときは同梱の「導入ガイド.pdf」</div></div>
+  </div>
+</section>
+
+<section class="scene center" id="s-outro">
+  <div class="kicker">無料・Windows 用</div>
+  <div class="title" style="font-size:110px">登録者数カウンター</div>
+  <div style="font-size:44px;font-weight:700">ダウンロードは概要欄のリンクから</div>
+  <div style="position:absolute;bottom:200px;font-size:26px;color:#aab4d4">YouTube および Google が提供・公認するツールではありません</div>
+</section>
+
+<div class="chapter" id="chapter"></div>
+<svg id="cursor" viewBox="0 0 24 24"><path d="M3 2 L3 20 L8 15 L11.5 22 L14.5 20.6 L11 13.8 L18 13.8 Z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>
+<div class="caption" id="caption"></div>
+<div class="credit">VOICEVOX:ずんだもん</div>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  if (params.has("nocap")) document.body.classList.add("nocap");
+  const token = encodeURIComponent(params.get("token") || "");
+  const $ = (id) => document.getElementById(id);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  let startedAt = 0;
+  const captions = [], chapters = [];
+  const now = () => (performance.now() - startedAt) / 1000;
+  function say(text) {
+    captions.push({ t: now(), text });
+    const cap = $("caption");
+    cap.replaceChildren();
+    if (!text) return;
+    const who = document.createElement("span"); who.className = "who"; who.textContent = "ずんだもん";
+    const line = document.createElement("span"); line.className = "line"; line.textContent = text;
+    cap.append(who, line);
+  }
+  function chapter(title) { chapters.push({ t: now(), title }); $("chapter").textContent = title; }
+  function scene(id) { for (const s of document.querySelectorAll(".scene")) s.classList.toggle("on", s.id === id); }
+  // 録画しているプログラムに、登録者数を変えてもらう
+  function bump(n) { document.title = `bump:${n}`; }
+
+  // --- カーソル操作 ---
+  function doc(frame) { return $(frame).contentDocument; }
+  function pointOf(frame, selector) {
+    const f = frame ? $(frame).getBoundingClientRect() : { left: 0, top: 0 };
+    const k = frame ? f.width / $(frame).offsetWidth : 1;   // 拡大して見せている倍率
+    const r = (frame ? doc(frame) : document).querySelector(selector).getBoundingClientRect();
+    return [f.left + (r.left + Math.min(r.width / 2, 60)) * k, f.top + (r.top + r.height / 2) * k];
+  }
+  async function moveTo(frame, selector) {
+    const [x, y] = pointOf(frame, selector);
+    $("cursor").style.left = `${x - 6}px`;
+    $("cursor").style.top = `${y - 4}px`;
+    await wait(800);
+  }
+  function ripple() {
+    const c = $("cursor"), r = document.createElement("div");
+    r.className = "ripple";
+    r.style.left = `${parseFloat(c.style.left) + 6}px`;
+    r.style.top = `${parseFloat(c.style.top) + 4}px`;
+    document.body.append(r);
+    setTimeout(() => r.remove(), 700);
+  }
+  async function click(frame, selector) {
+    await moveTo(frame, selector);
+    ripple();
+    (frame ? doc(frame) : document).querySelector(selector).click();
+    await wait(400);
+  }
+  async function type(frame, selector, text, ms = 70) {
+    await click(frame, selector);
+    const el = doc(frame).querySelector(selector);
+    el.focus();
+    for (const ch of text) {
+      el.value += ch;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      await wait(ms);
+    }
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  async function choose(frame, selector, value) {
+    await moveTo(frame, selector);
+    ripple();
+    const el = doc(frame).querySelector(selector);
+    el.value = value;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    await wait(300);
+  }
+  async function scrollTo(frame, selector, offset = 20) {
+    const win = doc(frame).defaultView, el = doc(frame).querySelector(selector);
+    win.scrollTo({ top: el.getBoundingClientRect().top + win.scrollY - offset, behavior: "smooth" });
+    await wait(900);
+  }
+  async function typeObs(text) {
+    for (const ch of text) { $("obs-url").textContent += ch; await wait(60); }
+  }
+
+  async function prepare() {
+    $("f-setup").src = `/settings?token=${token}`;
+    $("f-design").src = `/design?token=${token}`;
+    for (const f of ["f-setup", "f-design"]) {
+      while (!doc(f) || doc(f).readyState !== "complete" || !doc(f).getElementById("save")) await wait(100);
+    }
+    await wait(1000);
+    document.title = "ready";
+  }
+
+  async function play() {
+    startedAt = performance.now();
+    document.title = "playing";
+
+    // はじめに
+    chapter("");
+    scene("s-intro");
+    await wait(500); say("登録者数カウンターの使い方を、最初から順番に説明するのだ！");
+    await wait(5000);
+
+    // 1. ダウンロードと起動
+    chapter("1. ダウンロードと起動");
+    scene("s-start");
+    $("c-zip").classList.add("on");
+    await wait(400); say("まずはダウンロードした zip を右クリックして「すべて展開」するのだ");
+    await wait(5200);
+    $("c-zip").classList.remove("on"); $("c-smart").classList.add("on");
+    say("exe を起動して、青い画面が出たら「詳細情報」→「実行」なのだ");
+    await wait(6000);
+    $("c-smart").classList.remove("on"); $("c-tray").classList.add("on");
+    say("画面の右下に、青い棒グラフのアイコンが出たら起動できているのだ");
+    await wait(5500);
+
+    // 2. 初期設定
+    chapter("2. 初期設定");
+    scene("s-setup");
+    await wait(400); say("最初の起動では、ブラウザーで初期設定の画面が開くのだ");
+    await wait(3200);
+    say("利用規約を確認して、チェックを入れるのだ");
+    await click("f-setup", "#terms");
+    await wait(2000);
+    say("API キーは画面のリンクから無料で作れるのだ。手順は説明書にもあるのだ");
+    await moveTo("f-setup", "section:nth-of-type(2) ol li:nth-child(1) a");
+    await wait(1600);
+    await moveTo("f-setup", "section:nth-of-type(2) ol li:nth-child(3) a");
+    await wait(1500);
+    say("できたキーをここに貼り付けるのだ。人には見せちゃダメなのだ");
+    await type("f-setup", "#key", "AIzaSyD-dummy-key-for-video-0000000", 25);
+    await wait(1200);
+    say("チャンネルは「@」から始まるハンドルか、URL を貼ればいいのだ");
+    await scrollTo("f-setup", "section:nth-of-type(3)");
+    await type("f-setup", "#channel", "@yourname", 90);
+    await wait(1200);
+    say("「保存して確認する」を押すと…");
+    await click("f-setup", "#save");
+    while (doc("f-setup").getElementById("result").className !== "ok") await wait(100);
+    // 録画用に別のポートで動かしているので、実際に表示される URL にそろえる
+    doc("f-setup").getElementById("obs-url").textContent = "http://localhost:8765/";
+    await scrollTo("f-setup", "#save", 200);
+    say("今の登録者数が表示されたら成功なのだ！");
+    await moveTo("f-setup", "#result");
+    await wait(3600);
+
+    // 3. OBS に追加
+    chapter("3. OBS に追加");
+    scene("s-obs");
+    await wait(400); say("OBS の「ソース」の「＋」を押して、「ブラウザ」を選ぶのだ");
+    await click(null, "#obs-plus");
+    $("obs-add").classList.add("on-show");
+    await wait(900);
+    await moveTo(null, "#obs-browser");
+    $("obs-browser").classList.add("sel");
+    ripple();
+    await wait(1600);
+    $("obs-add").classList.remove("on-show");
+    $("obs-props").classList.add("on-show");
+    say("URL に「http://localhost:8765/」と入れて OK を押すのだ");
+    await moveTo(null, "#obs-url");
+    await typeObs("http://localhost:8765/");
+    await wait(900);
+    await click(null, "#obs-ok");
+    $("obs-props").classList.remove("on-show");
+    $("f-obs").src = "/";
+    await wait(700);
+    $("obs-src").classList.add("on");
+    say("配信画面に登録者数が出たのだ！ 位置や大きさはドラッグで変えられるのだ");
+    await moveTo(null, "#obs-src");
+    await wait(4200);
+    say("登録者が増えると、アニメーションで数字が変わるのだ");
+    bump(1240);
+    await wait(4500);
+
+    // 4. 見た目を変える
+    chapter("4. 見た目を変える");
+    scene("s-design");
+    $("f-design-obs").src = "/";
+    await wait(400); say("アイコンの右クリックから「見た目を変える」を選ぶと、この画面が開くのだ");
+    await wait(4000);
+    say("フォントは、パソコンに入っているフォントの名前を入れるだけなのだ");
+    await type("f-design", "#font_family", "Impact", 120);
+    await wait(1400);
+    say("文字の色や縁取りの太さも変えられるのだ");
+    await choose("f-design", "#color", "#ffd400");
+    await choose("f-design", "#outline", "6");
+    await wait(1500);
+    say("「YouTube 登録者数」の文字は、場所を変えたり動かしたりできるのだ");
+    await scrollTo("f-design", "#form section:nth-of-type(2)");
+    await choose("f-design", "#label_place", "above");
+    await choose("f-design", "#label_loop", "hop");
+    await wait(2200);
+    say("数字が変わるときの動きは 7 種類。ボタンでその場で試せるのだ");
+    await scrollTo("f-design", "#form section:nth-of-type(3)");
+    await choose("f-design", "#animation", "odometer");
+    await click("f-design", "[data-step='1']");
+    await wait(1800);
+    await choose("f-design", "#animation", "flip");
+    await click("f-design", "[data-step='1']");
+    await wait(1800);
+    say("増えたときの演出も選べるのだ。紙吹雪は楽しいのだ");
+    await choose("f-design", "#effect", "confetti");
+    await click("f-design", "[data-step='100']");
+    await wait(3000);
+    say("背景には、自分の絵や動く画像、動画も使えるのだ");
+    await scrollTo("f-design", "#form section:nth-of-type(4)");
+    await choose("f-design", "#bg_type", "asset");
+    await wait(300);
+    await choose("f-design", "#bg_asset", "night.png");
+    await wait(2600);
+    say("最後に「保存して OBS に反映」を押すと…");
+    await click("f-design", "#save");
+    await wait(1500);
+    say("OBS の画面にも、すぐ反映されるのだ！");
+    await moveTo(null, "#f-design-obs");
+    await wait(1200);
+    bump(1250);
+    await wait(4500);
+
+    // 5. 毎回の使い方
+    chapter("5. 毎回の使い方");
+    scene("s-daily");
+    const tips = [...$("tips").children], menu = [...$("tray-menu").children];
+    tips[0].classList.add("on");
+    await wait(400); say("配信のときは、exe を起動してから OBS を起動するだけなのだ");
+    await wait(5000);
+    tips[1].classList.add("on"); menu[7].classList.add("now");
+    say("終わったら、アイコンを右クリックして「終了」を選ぶのだ");
+    await wait(4500);
+    menu[7].classList.remove("now"); tips[2].classList.add("on");
+    say("困ったときは、一緒に入っている「導入ガイド.pdf」を見てほしいのだ");
+    await wait(5000);
+
+    // おわりに
+    chapter("");
+    scene("s-outro");
+    $("cursor").style.top = "1200px";
+    await wait(400); say("ダウンロードは概要欄のリンクからなのだ。ぜひ使ってみてほしいのだ！");
+    await wait(5600);
+    say("");
+    document.title = "done";
+  }
+</script>
+</body>
+</html>

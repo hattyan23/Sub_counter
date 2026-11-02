@@ -24,3 +24,6 @@ __pycache__/
 
 # 配布用の zip
 release/
+
+# 紹介動画の書き出し先
+promo/out/

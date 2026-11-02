@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>登録者数カウンター 紹介動画</title>
+<style>
+  :root { --blue: #2563eb; --zunda: #7ac943; --ink: #0f172a; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0b1020; }
+  body { font-family: "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", sans-serif; color: #fff; }
+  /* 背景でゆっくり動く光 */
+  .bg { position: absolute; inset: 0; background:
+          radial-gradient(900px 600px at 15% 20%, rgba(37,99,235,.45), transparent 60%),
+          radial-gradient(800px 600px at 85% 80%, rgba(122,201,67,.30), transparent 60%),
+          linear-gradient(160deg, #0b1020, #111a3a 60%, #0b1020); animation: drift 14s ease-in-out infinite alternate; }
+  @keyframes drift { to { filter: hue-rotate(25deg); transform: scale(1.06); } }
+
+  .scene { position: absolute; inset: 0; opacity: 0; transform: scale(1.03); transition: opacity .6s ease, transform .8s ease; pointer-events: none; }
+  .scene.on { opacity: 1; transform: none; }
+  .center { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .kicker { font-size: 44px; font-weight: 700; color: #cbd5ff; letter-spacing: .08em; }
+  .title { font-size: 150px; font-weight: 800; line-height: 1.15; margin: 10px 0 30px;
+           text-shadow: 0 8px 40px rgba(37,99,235,.6); }
+  .chips { display: flex; gap: 24px; }
+  .chip { font-size: 40px; font-weight: 700; padding: 10px 34px; border-radius: 999px; background: rgba(255,255,255,.12);
+          border: 2px solid rgba(255,255,255,.35); }
+  .chip.green { background: var(--zunda); color: #10230a; border-color: var(--zunda); }
+  .heading { position: absolute; left: 0; right: 0; top: 50px; text-align: center; font-size: 64px; font-weight: 800; }
+  .heading small { display: block; font-size: 32px; font-weight: 700; color: #cbd5ff; margin-top: 6px; }
+
+  /* 配信画面のイメージ */
+  .stream { position: absolute; left: 240px; top: 60px; width: 1440px; height: 810px; border-radius: 22px; overflow: hidden;
+            box-shadow: 0 30px 80px rgba(0,0,0,.6); background: linear-gradient(#1e3a8a, #0e7490 55%, #14532d 55%, #052e16); }
+  .stream .sun { position: absolute; left: 180px; top: 120px; width: 180px; height: 180px; border-radius: 50%;
+                 background: radial-gradient(#fde68a, #f59e0b); box-shadow: 0 0 120px #f59e0b; }
+  .stream .hill { position: absolute; bottom: 0; width: 900px; height: 420px; background: #166534; border-radius: 50% 50% 0 0; }
+  .stream .hill.b { left: 700px; width: 1000px; height: 330px; background: #15803d; }
+  .stream .player { position: absolute; left: 420px; bottom: 300px; width: 90px; height: 120px; border-radius: 18px;
+                    background: #f43f5e; animation: hop 1.1s ease-in-out infinite; }
+  @keyframes hop { 50% { transform: translateY(-90px); } }
+  .stream .live { position: absolute; left: 30px; top: 26px; font-size: 30px; font-weight: 800; background: #ef4444;
+                  padding: 4px 16px; border-radius: 8px; }
+  .stream .note { position: absolute; left: 30px; bottom: 22px; font-size: 26px; opacity: .7; }
+  .stream iframe { position: absolute; right: 30px; top: 20px; width: 640px; height: 360px; border: 0; }
+
+  /* 見た目の設定画面 */
+  .window { position: absolute; left: 160px; top: 170px; width: 1280px; height: 900px; transform: scale(.78); transform-origin: 0 0;
+            border-radius: 14px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.6); background: #f5f6f8; }
+  .window .bar { height: 44px; background: #e2e5ea; display: flex; align-items: center; gap: 10px; padding: 0 16px; }
+  .window .bar i { width: 14px; height: 14px; border-radius: 50%; background: #c3c8d0; }
+  .window .bar span { margin-left: 16px; color: #555; font-size: 18px; }
+  .window iframe { width: 1280px; height: 856px; border: 0; display: block; }
+  .steps-side { position: absolute; left: 1190px; top: 220px; width: 600px; }
+  .steps-side div { font-size: 38px; font-weight: 700; padding: 18px 26px; margin-bottom: 18px; border-radius: 16px;
+                    background: rgba(255,255,255,.08); border-left: 8px solid rgba(255,255,255,.2); transition: all .4s; }
+  .steps-side div.hot { background: rgba(37,99,235,.35); border-left-color: #93c5fd; transform: translateX(-12px); }
+
+  /* デザイン見本 */
+  .grid { position: absolute; left: 160px; top: 200px; display: grid; grid-template-columns: repeat(2, 784px); gap: 32px 32px; }
+  .tile { position: relative; }
+  .tile iframe { width: 784px; height: 330px; border: 0; border-radius: 16px; display: block; background: #0b1020;
+                 box-shadow: 0 16px 40px rgba(0,0,0,.5); }
+  .tile .cap { position: absolute; right: 16px; bottom: 12px; font-size: 24px; font-weight: 700; background: rgba(0,0,0,.55);
+               padding: 2px 14px; border-radius: 8px; }
+
+  /* 導入の 3 ステップ */
+  .steps { position: absolute; left: 160px; right: 160px; top: 300px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
+  .step { background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.18); border-radius: 26px; padding: 40px 36px;
+          min-height: 330px; opacity: 0; transform: translateY(40px); transition: all .6s ease; }
+  .step.on { opacity: 1; transform: none; }
+  .step b { display: inline-flex; width: 84px; height: 84px; border-radius: 50%; background: var(--blue); align-items: center;
+            justify-content: center; font-size: 48px; }
+  .step h3 { font-size: 52px; margin: 26px 0 12px; }
+  .step p { font-size: 30px; line-height: 1.6; color: #dbe3ff; margin: 0; }
+  .fine { position: absolute; left: 0; right: 0; top: 740px; text-align: center; font-size: 28px; line-height: 1.7; color: #cbd5ff; }
+
+
+  /* ずんだもんのセリフの字幕 */
+  /* 左右 0 から中央に寄せる（left: 50% だと幅が画面の半分までに縮み、長いセリフがはみ出す） */
+  .caption { position: absolute; left: 0; right: 0; bottom: 46px; margin: 0 auto; width: fit-content; min-width: 900px;
+             max-width: 1820px; box-sizing: border-box;
+             display: flex; align-items: center; gap: 22px; background: rgba(10, 20, 10, .82); border: 4px solid var(--zunda);
+             border-radius: 26px; padding: 18px 40px; transition: opacity .3s; }
+  .caption .who { flex: none; font-size: 30px; font-weight: 800; background: var(--zunda); color: #10230a; padding: 4px 18px; border-radius: 10px; }
+  .caption .line { font-size: 46px; font-weight: 800; white-space: nowrap; }
+  .caption:empty, .nocap .caption { display: none; }
+  .credit { position: absolute; right: 30px; top: 22px; font-size: 22px; color: rgba(255,255,255,.6); }
+  .nocap .credit { display: none; }
+</style>
+</head>
+<body>
+<div class="bg"></div>
+
+<section class="scene center" id="s-title">
+  <div class="kicker">OBS 用の配信ツール</div>
+  <div class="title">配信画面に、<br>登録者数を。</div>
+  <div class="chips"><span class="chip green">無料</span><span class="chip">OBS 対応</span><span class="chip">Windows</span></div>
+</section>
+
+<section class="scene" id="s-stream">
+  <div class="stream">
+    <div class="sun"></div><div class="hill"></div><div class="hill b"></div><div class="player"></div>
+    <div class="live">● LIVE</div>
+    <div class="note">配信画面のイメージ</div>
+    <iframe id="f-stream" src="/?preview"></iframe>
+  </div>
+</section>
+
+<section class="scene" id="s-design">
+  <div class="heading">見た目は自由に変えられる<small>変更はプレビューですぐ確認</small></div>
+  <div class="window"><div class="bar"><i></i><i></i><i></i><span>見た目の設定 - 登録者数カウンター</span></div>
+    <iframe id="f-design"></iframe></div>
+  <div class="steps-side" id="design-steps">
+    <div>アニメーション 7 種類</div>
+    <div>文字の色・フォント</div>
+    <div>増えたときの演出</div>
+    <div>文字のループアニメーション</div>
+    <div>背景に画像・動画</div>
+  </div>
+</section>
+
+<section class="scene" id="s-grid">
+  <div class="heading" style="top:60px">デザインの例</div>
+  <div class="grid">
+    <div class="tile"><iframe id="f-a" src="/?preview"></iframe><span class="cap">回転＋紙吹雪</span></div>
+    <div class="tile"><iframe id="f-b" src="/?preview"></iframe><span class="cap">めくり＋動く背景</span></div>
+    <div class="tile"><iframe id="f-c" src="/?preview"></iframe><span class="cap">カウントアップ＋きらきら</span></div>
+    <div class="tile"><iframe id="f-d" src="/?preview"></iframe><span class="cap">バウンド＋文字がふわふわ</span></div>
+  </div>
+</section>
+
+<section class="scene" id="s-steps">
+  <div class="heading">はじめかたは 3 ステップ</div>
+  <div class="steps">
+    <div class="step"><b>1</b><h3>起動する</h3><p>zip を展開して<br>SubCounter.exe をダブルクリック</p></div>
+    <div class="step"><b>2</b><h3>初期設定</h3><p>API キーとチャンネルを<br>画面の案内どおりに入力</p></div>
+    <div class="step"><b>3</b><h3>OBS に追加</h3><p>ブラウザソースに<br>URL を貼るだけ</p></div>
+  </div>
+  <div class="fine">※ API キー（無料）は各自の Google アカウントで作成します。手順は導入ガイド（PDF）に載っています<br>
+    ※ YouTube および Google が提供・公認するツールではありません</div>
+</section>
+
+
+<div class="caption" id="caption"></div>
+<div class="credit">VOICEVOX:ずんだもん</div>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  if (params.has("nocap")) document.body.classList.add("nocap");
+  const $ = (id) => document.getElementById(id);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let base = null;   // 見た目の初期値（サーバーから読む）
+
+  function send(frame, msg) { $(frame).contentWindow.postMessage(msg, location.origin); }
+  function design(frame, d) { send(frame, { type: "design", design: { ...base, ...d } }); }
+  function count(frame, n) { send(frame, { type: "count", count: n }); }
+
+  function scene(id) {
+    for (const s of document.querySelectorAll(".scene")) s.classList.toggle("on", s.id === id);
+  }
+  // 字幕を出した時刻を残し、音声を合わせるための台本（SRT）に使う
+  let startedAt = 0;
+  const captions = [];
+  function say(text) {
+    captions.push({ t: (performance.now() - startedAt) / 1000, text });
+    const cap = $("caption");
+    cap.replaceChildren();
+    if (!text) return;
+    const who = document.createElement("span"); who.className = "who"; who.textContent = "ずんだもん";
+    const line = document.createElement("span"); line.className = "line"; line.textContent = text;
+    cap.append(who, line);
+  }
+
+  // 見た目の設定画面を、実際のボタンや入力欄を使って操作する
+  function designDoc() { return $("f-design").contentDocument; }
+  function setField(id, value) {
+    const el = designDoc().getElementById(id);
+    el.value = value;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function press(selector) { designDoc().querySelector(selector).click(); }
+  function hot(i) { [...$("design-steps").children].forEach((el, n) => el.classList.toggle("hot", n === i)); }
+
+  // 読み込みが終わったら、録画側に「準備ができた」と知らせる
+  const ready = new Set();
+  addEventListener("message", (e) => {
+    if (e.origin !== location.origin || e.data.type !== "ready") return;
+    for (const id of ["f-stream", "f-a", "f-b", "f-c", "f-d"]) if ($(id).contentWindow === e.source) ready.add(id);
+  });
+
+  async function prepare() {
+    base = await (await fetch("/api/design")).json();
+    $("f-design").src = `/design?token=${encodeURIComponent(params.get("token") || "")}`;
+    while (ready.size < 5 || !designDoc() || !designDoc().getElementById("save") || designDoc().readyState !== "complete") await wait(100);
+    await wait(800);
+    design("f-stream", { animation: "odometer", effect: "confetti", separator: true, duration_ms: 1100, size: 120 });
+    count("f-stream", 1230);
+    design("f-a", { animation: "odometer", effect: "confetti", separator: true, color: "#ffffff", bg_type: "asset", bg_asset: "night.png",
+                    font_family: "Impact", font_weight: 400, outline: 4, duration_ms: 1000 });
+    design("f-b", { animation: "flip", effect: "glow", color: "#fde68a", outline_color: "#3b0764", outline: 5, bg_type: "asset",
+                    bg_asset: "stars.gif", font_family: "Yu Mincho", font_weight: 900, label_loop: "blink", duration_ms: 900 });
+    design("f-c", { animation: "countup", effect: "sparkle", color: "#f9a8d4", outline_color: "#831843", bg_type: "asset",
+                    bg_asset: "pastel.png", font_family: "BIZ UDPGothic", label_place: "above", label_loop: "hop", duration_ms: 1400 });
+    design("f-d", { animation: "bounce", effect: "sparkle", color: "#67e8f9", outline_color: "#082f49", bg_type: "color",
+                    bg_color: "#0f172a", font_family: "Arial Black", font_weight: 900, label_loop: "float", label_size: 130,
+                    duration_ms: 900 });
+    count("f-a", 12300); count("f-b", 998); count("f-c", 4560); count("f-d", 870);
+    // 設定画面のプレビューも同じ数字から始める
+    await wait(300);
+    document.title = "ready";
+  }
+
+  async function play() {
+    startedAt = performance.now();
+    document.title = "playing";
+    scene("s-title");
+    await wait(600); say("配信画面に登録者数を出せるツールができたのだ！");
+    await wait(3900);
+
+    scene("s-stream");
+    await wait(500); say("登録者が増えると、数字がくるっと回ってお祝いしてくれるのだ！");
+    await wait(1500); count("f-stream", 1240);
+    await wait(2600); count("f-stream", 1250);
+    await wait(2900);
+
+    scene("s-design");
+    await wait(300); say("フォントや色、アニメーションは画面でポチポチ選ぶだけなのだ");
+    hot(0); await wait(700); setField("animation", "odometer"); await wait(500); press("[data-step='1']");
+    await wait(1500); setField("animation", "flip"); await wait(400); press("[data-step='1']");
+    await wait(1200); hot(1); setField("color", "#ffd400"); await wait(500); setField("font_family", "Impact"); setField("font_weight", "400");
+    await wait(900); hot(2); setField("effect", "confetti"); await wait(400); press("[data-step='100']");
+    await wait(1700); hot(3); setField("label_loop", "hop");
+    await wait(1200);
+
+    scene("s-grid");
+    await wait(300); say("背景には自分の絵や動く画像も置けるのだ");
+    await wait(900); count("f-a", 12400); count("f-c", 4570);
+    await wait(1300); count("f-b", 999); count("f-d", 871);
+    await wait(1600); count("f-a", 12500); count("f-c", 4580);
+    await wait(1200); count("f-b", 1000); count("f-d", 872);
+    await wait(1700);
+
+    scene("s-steps");
+    await wait(300); say("設定は画面の案内どおりに進めるだけなのだ");
+    const steps = document.querySelectorAll(".step");
+    for (const s of steps) { s.classList.add("on"); await wait(700); }
+    await wait(3000);
+    say("");
+    document.title = "done";
+  }
+</script>
+</body>
+</html>
