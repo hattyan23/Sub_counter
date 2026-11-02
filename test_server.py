@@ -122,7 +122,7 @@ class DesignTest(TempConfig):
 
     def test_rejects_invalid_values(self):
         cases = [("font_family", 'a"b'), ("font_family", "a;}body{"), ("size", 999), ("size", True), ("size", 1.5),
-                 ("color", "red"), ("animation", "explode"), ("font_weight", 500), ("shadow", 1),
+                 ("color", "red"), ("animation", "explode"), ("label_place", "hidden"), ("label_size", 0), ("font_weight", 500), ("shadow", 1),
                  ("bg_asset", "../config.json"), ("font_asset", "bg.png")]
         for key, value in cases:
             error = design.save({key: value})

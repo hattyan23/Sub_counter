@@ -133,6 +133,31 @@
     </section>
 
     <section>
+      <h2>「YouTube 登録者数」の文字</h2>
+      <p class="sub">数字の出どころを示すために YouTube の規約で必要な表示なので、消すことはできません。置き場所と大きさは変えられます。</p>
+      <div class="field">
+        <label for="label_place">置き場所</label>
+        <select id="label_place">
+          <option value="below">数字の下</option>
+          <option value="above">数字の上</option>
+          <option value="free">自由な位置</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="label_size">大きさ</label>
+        <div class="row"><input type="range" id="label_size" min="30" max="300" step="5"><output data-for="label_size" data-unit="%"></output></div>
+      </div>
+      <div class="field" data-show="label_place=free">
+        <label for="label_x">横の位置</label>
+        <div class="row"><input type="range" id="label_x" min="0" max="100"><output data-for="label_x" data-unit="%"></output></div>
+      </div>
+      <div class="field" data-show="label_place=free">
+        <label for="label_y">縦の位置</label>
+        <div class="row"><input type="range" id="label_y" min="0" max="100"><output data-for="label_y" data-unit="%"></output></div>
+      </div>
+    </section>
+
+    <section>
       <h2>数字が変わるときのアニメーション</h2>
       <div class="field">
         <label for="animation">動き</label>
@@ -219,12 +244,14 @@
   history.replaceState(null, "", location.pathname);
   const $ = (id) => document.getElementById(id);
   const headers = { "X-Settings-Token": token };
-  const NUMBERS = ["font_weight", "size", "outline", "pos_x", "pos_y", "duration_ms", "bg_opacity"];
+  const NUMBERS = ["font_weight", "size", "outline", "pos_x", "pos_y", "label_size", "label_x", "label_y", "duration_ms",
+                   "bg_opacity"];
   const KEYS = ["font_family", "font_asset", "font_weight", "size", "color", "outline_color", "outline", "shadow", "separator",
-                "pos_x", "pos_y", "animation", "duration_ms", "effect", "effect_asset", "bg_type", "bg_color", "bg_asset",
+                "pos_x", "pos_y", "label_place", "label_size", "label_x", "label_y", "animation", "duration_ms", "effect", "effect_asset", "bg_type", "bg_color", "bg_asset",
                 "bg_fit", "bg_opacity"];
   const DEFAULTS = { font_family: "", font_asset: "", font_weight: 700, size: 100, color: "#ffffff", outline_color: "#000000",
-                     outline: 3, shadow: true, separator: false, pos_x: 50, pos_y: 50, animation: "slide", duration_ms: 800,
+                     outline: 3, shadow: true, separator: false, pos_x: 50, pos_y: 50, label_place: "below",
+                     label_size: 100, label_x: 50, label_y: 80, animation: "slide", duration_ms: 800,
                      effect: "none", effect_asset: "", bg_type: "none", bg_color: "#000000", bg_asset: "", bg_fit: "cover",
                      bg_opacity: 100 };
   const FONT_SUGGESTIONS = ["Yu Gothic", "Yu Gothic UI", "Meiryo", "BIZ UDPGothic", "BIZ UDGothic", "MS Gothic", "Yu Mincho",

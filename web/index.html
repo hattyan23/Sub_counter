@@ -10,7 +10,9 @@
   #bg img, #bg video, #fx img, #fx video { width: 100%; height: 100%; display: block; }
   #fx canvas { width: 100%; height: 100%; }
   #stage { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center;
-           white-space: nowrap; font-size: min(25vw, 70vh); visibility: hidden; }
+           white-space: nowrap; font-size: min(25vw, 70vh); visibility: hidden;
+           display: flex; flex-direction: column; align-items: center; }
+  #stage.above { flex-direction: column-reverse; }
   #count, #source { text-shadow: var(--shadow); }
   /* 桁ごとに動かすので、数字の幅をそろえる */
   #count { display: inline-flex; line-height: 1.15; font-variant-numeric: tabular-nums; }
@@ -22,7 +24,9 @@
   .stack { position: relative; }
   .stack > .old { position: absolute; left: 50%; top: 0; }
   /* YouTube の規約により、データの出どころが YouTube だと分かるようにする */
-  #source { display: block; font-size: .16em; line-height: 1.4; }
+  #source { display: block; font-size: .16em; line-height: 1.4; white-space: nowrap; }
+  /* 自由な位置に置くときは、数字とは別に画面に対する位置で置く */
+  #source.free { position: fixed; }
   #notice { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; text-align: center;
             font: 700 min(5vw, 12vh)/1.5 sans-serif; padding: 0 4vw; color: #fff;
             text-shadow: 0 0 .08em #000, 0 0 .08em #000, 0 0 .2em #000; }
@@ -322,7 +326,7 @@
     }
     if (d !== design) return;
     const families = [fontFamily, d.font_family].filter(Boolean).map((f) => `"${f}"`);
-    stageEl.style.fontFamily = [...families, "sans-serif"].join(", ");
+    document.body.style.fontFamily = [...families, "sans-serif"].join(", ");
   }
 
   let bgKey = null;
@@ -348,13 +352,32 @@
     }
   }
 
+  // 「YouTube 登録者数」は規約でデータの出どころを示すために出すので、消さずに位置と大きさだけ変えられる
+  function applyLabel(d) {
+    const free = d.label_place === "free";
+    stageEl.classList.toggle("above", d.label_place === "above");
+    sourceEl.classList.toggle("free", free);
+    if (free) {
+      document.body.append(sourceEl);
+      // 0% で左端（上端）、100% で右端（下端）にそろえ、端に寄せても画面からはみ出さないようにする
+      Object.assign(sourceEl.style, { left: `${d.label_x}%`, top: `${d.label_y}%`,
+                                      transform: `translate(-${d.label_x}%, -${d.label_y}%)`,
+                                      fontSize: `calc(min(25vw, 70vh) * ${.16 * d.label_size / 100})` });
+    } else {
+      stageEl.append(sourceEl);
+      Object.assign(sourceEl.style, { left: "", top: "", transform: "", fontSize: `${.16 * d.label_size / 100}em` });
+    }
+  }
+
   function applyDesign(d) {
     design = d;
     Object.assign(stageEl.style, {
-      left: `${d.pos_x}%`, top: `${d.pos_y}%`, color: d.color, fontWeight: d.font_weight,
-      fontSize: `calc(min(25vw, 70vh) * ${d.size / 100})`, visibility: "visible",
+      left: `${d.pos_x}%`, top: `${d.pos_y}%`, fontSize: `calc(min(25vw, 70vh) * ${d.size / 100})`, visibility: "visible",
     });
-    stageEl.style.setProperty("--shadow", textShadow(d));
+    // 「YouTube 登録者数」を数字の外に出しても同じ見た目になるよう、文字の設定はページ全体にかける
+    Object.assign(document.body.style, { color: d.color, fontWeight: d.font_weight });
+    document.body.style.setProperty("--shadow", textShadow(d));
+    applyLabel(d);
     applyFont(d);
     applyBackground(d);
     if (shown !== null) show(shown, false);
@@ -362,7 +385,8 @@
 
   // 見た目を読めなかったときの最低限の表示
   const FALLBACK = { font_family: "", font_asset: "", font_weight: 700, size: 100, color: "#ffffff", outline_color: "#000000",
-                     outline: 3, shadow: true, separator: false, pos_x: 50, pos_y: 50, animation: "none", duration_ms: 800,
+                     outline: 3, shadow: true, separator: false, pos_x: 50, pos_y: 50, label_place: "below",
+                     label_size: 100, label_x: 50, label_y: 80, animation: "none", duration_ms: 800,
                      effect: "none", effect_asset: "", bg_type: "none", bg_color: "#000000", bg_asset: "", bg_fit: "cover",
                      bg_opacity: 100 };
 

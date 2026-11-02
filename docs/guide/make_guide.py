@@ -119,8 +119,8 @@ def main():
         design.wait_for_timeout(800)
         design.screenshot(path=IMG / "design.png", full_page=True)
         mark(IMG / "design.png", [box_of(design, s) for s in
-                                  (".screen", ".try", "#form section:nth-of-type(1)", "#form section:nth-of-type(2)",
-                                   "#form section:nth-of-type(3)", "#save")])
+                                  (".screen", ".try", "#form section:nth-of-type(1)", "#form section:nth-of-type(3)",
+                                   "#form section:nth-of-type(4)", "#save")])
 
         # アニメーションの途中の様子（増えると上、減ると下）
         frame = design.frame_locator("#screen")
