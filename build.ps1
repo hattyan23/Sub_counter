@@ -11,7 +11,7 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 & $py -m PyInstaller --noconfirm --clean --onedir --noconsole --name SubCounter --add-data "web;web" --hidden-import pystray._win32 --collect-all tzdata server.py
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-Copy-Item docs\*.txt dist\SubCounter\
+Copy-Item docs\*.txt, docs\*.pdf dist\SubCounter\
 
 # build\ にも起動できない同名の exe ができるので、間違えて開かないように消す
 Remove-Item build -Recurse -Force

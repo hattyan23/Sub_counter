@@ -117,7 +117,8 @@
         const travel = `${-(steps.length - 1) * 1.15}em`;
         const frames = dir > 0 ? [{ transform: "none" }, { transform: `translateY(${travel})` }]
                                : [{ transform: `translateY(${travel})` }, { transform: "none" }];
-        strip.animate(frames, { duration: d, easing: EASE, fill: "forwards", delay: (n - 1 - i) * d * .06 });
+        // 待ち時間の間も最初の位置に置く（減るときに新しい数字が一瞬見えないように）
+        strip.animate(frames, { duration: d, easing: EASE, fill: "both", delay: (n - 1 - i) * d * .06 });
       }
       countEl.replaceChildren(...cells);
       setTimeout(() => settle(my, b), d + n * d * .06);

@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>登録者数カウンター かんたんガイド</title>
+<style>
+  @page { size: A4; }
+  :root { --accent: #2563eb; --accent-soft: #e8efff; --text: #1d2026; --sub: #5d6470; --line: #d9dde3;
+          --warn: #b45309; --warn-soft: #fff4e0; --red: #e53935; --ok: #15803d; --ok-soft: #e7f6ec; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; color: var(--text); font: 10.5pt/1.75 "Yu Gothic", "Meiryo", sans-serif; font-weight: 500; }
+  .page { break-before: page; }
+  .page:first-child { break-before: auto; }
+  h1 { font-size: 26pt; line-height: 1.3; margin: 0 0 8px; }
+  h2 { font-size: 17pt; margin: 0 0 4px; padding-bottom: 6px; border-bottom: 3px solid var(--accent); display: flex; gap: 10px; align-items: center; }
+  h2 .step { background: var(--accent); color: #fff; font-size: 10pt; padding: 2px 10px; border-radius: 99px; white-space: nowrap; }
+  h3 { font-size: 12.5pt; margin: 18px 0 6px; }
+  p { margin: 0 0 8px; }
+  .lead { color: var(--sub); margin: 8px 0 14px; }
+  .sub { color: var(--sub); font-size: 9pt; }
+  img { max-width: 100%; display: block; }
+  .shot { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .center { text-align: center; }
+  figure { margin: 8px 0 12px; break-inside: avoid; }
+  figcaption { font-size: 9pt; color: var(--sub); margin-top: 4px; text-align: center; }
+  .tag { display: inline-block; font-size: 8pt; color: var(--sub); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 6px; vertical-align: 2px; }
+  kbd, .key { font-family: inherit; background: #f1f3f6; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 6px; font-weight: 700; white-space: nowrap; }
+  code { font-family: Consolas, "Yu Gothic", monospace; background: #f1f3f6; border-radius: 4px; padding: 1px 6px; font-weight: 700; }
+  .url { font-size: 15pt; text-align: center; background: var(--accent-soft); border: 2px dashed var(--accent); border-radius: 8px; padding: 8px; margin: 8px 0; font-family: Consolas, monospace; font-weight: 700; }
+
+  .box { border-radius: 8px; padding: 10px 14px; margin: 10px 0; break-inside: avoid; }
+  .box.warn { background: var(--warn-soft); border-left: 5px solid var(--warn); }
+  .box.info { background: var(--accent-soft); border-left: 5px solid var(--accent); }
+  .box.ok { background: var(--ok-soft); border-left: 5px solid var(--ok); }
+  .box > b:first-child { display: block; margin-bottom: 2px; }
+
+  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 8px 0; }
+  ol.steps > li { counter-increment: s; position: relative; padding-left: 36px; margin-bottom: 8px; break-inside: avoid; }
+  ol.steps > li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 24px; height: 24px; border-radius: 50%;
+                          background: var(--red); color: #fff; font-weight: 700; text-align: center; line-height: 24px; font-size: 10pt; }
+  ol.steps.blue > li::before { background: var(--accent); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; align-items: start; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .arrow { font-size: 20pt; color: var(--accent); font-weight: 700; flex: none; }
+
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; font-size: 10pt; }
+  th, td { border: 1px solid var(--line); padding: 5px 10px; text-align: left; vertical-align: top; }
+  th { background: #f4f6f9; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* 表紙 */
+  .cover { height: 260mm; display: flex; flex-direction: column; }
+  .cover .hero { position: relative; border-radius: 14px; overflow: hidden; margin: 18px 0; aspect-ratio: 16 / 9; }
+  .cover .hero img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .scene { background: radial-gradient(circle at 70% 30%, #4f46e5 0, transparent 45%),
+                       radial-gradient(circle at 20% 80%, #db2777 0, transparent 40%),
+                       linear-gradient(135deg, #0f172a, #1e3a8a 60%, #0e7490); }
+  .toc { columns: 2; padding-left: 1.4em; margin: 6px 0 0; }
+
+  /* 画面のイメージ図 */
+  .mock { border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 10px; font-size: 9.5pt; break-inside: avoid; }
+  .mock .title { font-weight: 700; margin-bottom: 6px; }
+  .hl { outline: 3px solid var(--red); outline-offset: 2px; border-radius: 4px; }
+  .menu { border: 1px solid #c9ced6; background: #fafbfc; border-radius: 6px; box-shadow: 0 3px 10px rgba(0,0,0,.15); padding: 4px 0; font-size: 9.5pt; min-width: 170px; }
+  .menu div { padding: 3px 14px; white-space: nowrap; }
+  .menu .dim { color: #8b919b; }
+  .menu .sep { border-top: 1px solid #e2e5ea; padding: 0; margin: 3px 0; }
+  .menu .on { background: var(--accent-soft); }
+  .icon { display: inline-flex; width: 22px; height: 22px; border-radius: 5px; background: var(--accent); align-items: flex-end; justify-content: center; gap: 2px; padding: 3px; vertical-align: middle; }
+  .icon i { width: 3px; background: #fff; display: block; }
+  .taskbar { background: #e9edf2; border-radius: 6px; padding: 6px 10px; display: flex; gap: 12px; align-items: center; justify-content: flex-end; font-size: 9pt; }
+  .smartscreen { background: #0067b8; color: #fff; border-radius: 6px; padding: 14px; font-size: 9pt; }
+  .smartscreen .big { font-size: 13pt; font-weight: 700; margin-bottom: 6px; }
+  .smartscreen .btn { display: inline-block; border: 1px solid #fff; padding: 2px 16px; margin-top: 8px; }
+  .smartscreen u { color: #fff; }
+  .obs { background: #2b2e38; color: #dfe3ea; border-radius: 6px; padding: 10px; font-size: 9pt; }
+  .obs .panel { background: #1f2129; border-radius: 4px; padding: 6px 8px; margin-top: 6px; }
+  .obs .field { background: #12141a; border: 1px solid #4b5060; border-radius: 3px; padding: 2px 6px; font-family: Consolas, monospace; }
+  .obs .menu { background: #3a3e4b; border-color: #555b6b; color: #dfe3ea; }
+  .obs .menu .on { background: #4a5ae8; }
+  .frames { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-items: center; width: 78%; margin: 0 auto; }
+  .kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; margin: 8px 0; font-size: 9.5pt; }
+  .kinds b { display: inline-block; min-width: 8.5em; }
+  .frames img { border: 1px solid var(--line); border-radius: 6px; }
+  .frames-head { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-weight: 700; }
+  .dir { font-size: 9pt; font-weight: 700; color: #fff; border-radius: 99px; padding: 0 10px; }
+  .dir.up { background: var(--ok); } .dir.down { background: var(--warn); }
+  .faq dt { font-weight: 700; margin-top: 10px; }
+  .faq dt::before { content: "Q. "; color: var(--accent); }
+  .faq dd { margin: 2px 0 0 1.6em; }
+</style>
+</head>
+<body>
+
+<!-- 表紙 -->
+<section class="page cover">
+  <p class="sub" style="margin:0">OBS で使う配信ツール</p>
+  <h1>登録者数カウンター<br>かんたんガイド</h1>
+  <p class="lead">YouTube チャンネルの登録者数を、OBS の配信画面にリアルタイムで表示するツールです。<br>
+    はじめての方でも、この説明書の順番どおりに進めれば 15 分ほどで表示できます。</p>
+  <div class="hero scene"><img src="img/counter.png" alt=""></div>
+  <h3>もくじ</h3>
+  <ol class="toc">
+    <li>始める前に</li>
+    <li>ツールを起動する</li>
+    <li>初期設定をする</li>
+    <li>OBS に表示する</li>
+    <li>見た目を変える</li>
+    <li>毎回の使い方</li>
+    <li>困ったときは</li>
+    <li>削除のしかた・規約について</li>
+  </ol>
+  <div style="flex:1"></div>
+  <p class="sub">このツールは YouTube API Services を使用しています。YouTube や Google が提供・公認するものではありません。<br>
+    この説明書の「イメージ」と書いた図は、実際の画面を簡単に描いたものです。お使いの環境によって見た目が少し異なります。</p>
+</section>
+
+<!-- 1 -->
+<section class="page">
+  <h2><span class="step">1</span>始める前に</h2>
+  <h3>用意するもの</h3>
+  <table>
+    <tr><th style="width:32%">もの</th><th>説明</th></tr>
+    <tr><td>Windows のパソコン</td><td>Windows 10 または 11</td></tr>
+    <tr><td>OBS Studio</td><td>配信ソフト。<code>https://obsproject.com/ja/</code> から無料で入手できます</td></tr>
+    <tr><td>Google アカウント</td><td>YouTube に使っているアカウントで大丈夫です。API キーを作るのに使います（無料）</td></tr>
+    <tr><td>このツールの zip ファイル</td><td>配布ページからダウンロードしたもの</td></tr>
+  </table>
+
+  <h3>全体の流れ</h3>
+  <div class="row" style="margin:6px 0 14px">
+    <div class="box info" style="flex:1;margin:0"><b>① 起動</b>exe をダブルクリック</div><span class="arrow">›</span>
+    <div class="box info" style="flex:1;margin:0"><b>② 初期設定</b>API キーとチャンネルを入力</div><span class="arrow">›</span>
+    <div class="box info" style="flex:1;margin:0"><b>③ OBS</b>ブラウザソースを追加</div><span class="arrow">›</span>
+    <div class="box ok" style="flex:1;margin:0"><b>完成！</b>好みで見た目を変える</div>
+  </div>
+  <p>①〜③は最初の 1 回だけです。2 回目からは exe を起動するだけで表示されます。</p>
+
+  <h3>表示される数字について</h3>
+  <p>YouTube の仕様で、登録者が 1,000 人を超えると、上から 3 桁より下は切り捨てた数字になります。</p>
+  <table style="width:70%">
+    <tr><th>実際の登録者数</th><th>表示される数字</th><th>数字が動く単位</th></tr>
+    <tr><td class="num">999</td><td class="num">999</td><td>1 人ごと</td></tr>
+    <tr><td class="num">1,234</td><td class="num">1,230</td><td>10 人ごと</td></tr>
+    <tr><td class="num">12,345</td><td class="num">12,300</td><td>100 人ごと</td></tr>
+  </table>
+  <div class="box info"><b>故障ではありません</b>YouTube Studio と数字が少し違ったり、しばらく数字が変わらなかったりするのは、この仕様のためです。</div>
+</section>
+
+<!-- 2 -->
+<section class="page">
+  <h2><span class="step">2</span>ツールを起動する<span class="sub" style="font-weight:500">（最初の 1 回だけ）</span></h2>
+
+  <h3>zip ファイルを展開する</h3>
+  <div class="grid2">
+    <ol class="steps">
+      <li>ダウンロードした zip ファイルを<b>右クリック</b>します。</li>
+      <li><b>「すべて展開」</b>を選び、<b>「展開」</b>を押します。</li>
+      <li>できたフォルダーを、デスクトップなど分かりやすい場所に置きます。</li>
+    </ol>
+    <div class="mock"><div class="title">イメージ<span class="tag">右クリックしたところ</span></div>
+      <div class="row"><span style="width:30px;height:36px;border-radius:3px;background:#f3c443;color:#5b4300;font-size:7pt;font-weight:700;display:flex;align-items:flex-end;justify-content:center;padding-bottom:3px">ZIP</span><b>SubCounter.zip</b></div>
+      <div class="menu" style="margin:6px 0 0 30px;width:180px">
+        <div>開く</div><div class="on hl">すべて展開...</div><div class="sep"></div><div>コピー</div><div>削除</div>
+      </div>
+    </div>
+  </div>
+  <div class="box warn"><b>zip を開いただけでは動きません</b>必ず「すべて展開」してから使ってください。
+    フォルダーの中の <b>「_internal」</b> フォルダーは、消したり移動したりしないでください。</div>
+
+  <h3>SubCounter.exe を起動する</h3>
+  <div class="grid2">
+    <div>
+      <ol class="steps">
+        <li>展開したフォルダーの <b>「SubCounter.exe」</b> をダブルクリックします。</li>
+        <li>右のような青い画面が出たら、<b>「詳細情報」</b>を押し、次に出る<b>「実行」</b>を押します。</li>
+      </ol>
+      <p class="sub">個人が配布しているソフトのため表示されることがあります。2 回目からは出ません。</p>
+    </div>
+    <div class="smartscreen"><span class="tag" style="color:#fff;border-color:#9cc7ea;margin:0 0 6px">イメージ</span>
+      <div class="big">Windows によって PC が保護されました</div>
+      <div>Microsoft Defender SmartScreen は認識されないアプリの起動を停止しました。</div>
+      <div style="margin-top:6px"><u class="hl" style="outline-color:#ffd54f">詳細情報</u></div>
+      <div class="row" style="justify-content:flex-end;gap:8px"><span class="btn hl" style="outline-color:#ffd54f">実行</span><span class="btn">実行しない</span></div>
+    </div>
+  </div>
+
+  <div class="box ok"><b>起動できたら</b>ブラウザーで「初期設定」の画面が自動で開きます。
+    その前に、次のページでツールのアイコンの場所を確認しておきましょう。</div>
+</section>
+
+<section class="page">
+  <h2><span class="step">2</span>ツールのアイコンの場所</h2>
+  <p class="lead">このツールには普通のウィンドウがありません。画面の右下（時計の近く）に出る
+    <b>青い棒グラフのアイコン</b> <span class="icon"><i style="height:7px"></i><i style="height:11px"></i><i style="height:15px"></i></span>
+    から、設定を開いたり終了したりします。</p>
+  <figure style="width:82%;margin:10px auto 14px">
+    <!-- 作者のデスクトップの右下を切り抜いたもの（make_guide.py では作り直さない） -->
+    <img class="shot" src="img/tray_desktop.png" alt="タスクバー右下の隠れているアイコンを開いたところ">
+    <figcaption>イメージ：画面右下を拡大したところ。並んでいるアイコンの種類や数は人によって違います。</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>時計の左にある<b>「^」</b>を押します（開くと下向きの矢印に変わります）。隠れているアイコンが出てきます。</li>
+    <li>その中の<b>青い棒グラフ</b>のアイコンがこのツールです。<b>右クリック</b>するとメニューが出ます。</li>
+  </ol>
+  <div class="box info"><b>いつでも見えるようにするには</b>
+    出てきたアイコンを、時計の左側のタスクバーへドラッグすると、いつも表示されるようになります。</div>
+  <div class="box warn"><b>アイコンがどこにもないとき</b>
+    ツールが起動していません。「SubCounter.exe」をもう一度ダブルクリックしてください。</div>
+</section>
+
+<!-- 3 -->
+<section class="page">
+  <h2><span class="step">3</span>初期設定をする<span class="sub" style="font-weight:500">（最初の 1 回だけ）</span></h2>
+  <p class="lead">ブラウザーに開いた「初期設定」の画面に、上から順に入力します。</p>
+  <div class="grid2" style="grid-template-columns: 1.05fr 1fr">
+    <figure class="shot" style="margin:0"><img src="img/settings.png" alt="初期設定の画面"></figure>
+    <div>
+      <ol class="steps">
+        <li><b>同意のチェック</b><br>リンク先の利用規約とプライバシーポリシーを確認し、チェックを入れます。</li>
+        <li><b>API キー</b><br>Google Cloud で作ったキーを貼り付けます。作り方は次のページで説明します。</li>
+        <li><b>チャンネル</b><br>次のどれかを貼り付けます。
+          <ul style="margin:2px 0;padding-left:1.2em">
+            <li>ハンドル（例：<code>@yourname</code>）</li>
+            <li>チャンネルページの URL</li>
+            <li>チャンネル ID（UC で始まる 24 文字）</li>
+          </ul></li>
+        <li><b>「保存して確認する」</b>を押します。</li>
+      </ol>
+      <div class="box warn"><b>API キーはパスワードと同じです</b>人に教えたり、配信画面に映したりしないでください。</div>
+    </div>
+  </div>
+  <h3>うまくいくと</h3>
+  <figure class="shot" style="width:72%;margin-left:auto;margin-right:auto"><img src="img/settings_done.png" alt="確認できた画面"></figure>
+  <p>「確認できました。登録者数：○○」と出れば成功です。問題があるときは、ここに理由が表示されるので、その内容を直してもう一度押してください。</p>
+</section>
+
+<section class="page">
+  <h2><span class="step">3</span>API キーの作り方</h2>
+  <p class="lead">API キーは、このツールが YouTube から登録者数を受け取るための「合鍵」です。無料で作れます。
+    初期設定の画面にある青いリンクから、それぞれのページを直接開けます。</p>
+  <ol class="steps blue">
+    <li><b>Google Cloud でプロジェクトを作る</b><br>
+      画面の「Google Cloud でプロジェクトを作る」のリンクを開きます。初めての場合は利用規約への同意を求められます。
+      プロジェクト名は自由です（例：<code>sub-counter</code>）。「作成」を押します。</li>
+    <li><b>YouTube Data API v3 を有効にする</b><br>
+      「YouTube Data API v3 のページ」のリンクを開き、<b>「有効にする」</b>を押します。
+      <span class="sub">画面上部のプロジェクト名が、1 で作ったものになっているか確認してください。</span></li>
+    <li><b>API キーを作る</b><br>
+      「認証情報のページ」のリンクを開き、<b>「＋ 認証情報を作成」→「API キー」</b>を選びます。</li>
+    <li><b>キーを制限する（おすすめ）</b><br>
+      作ったキーの編集画面の「API の制限」で<b>「キーを制限」</b>を選び、<b>YouTube Data API v3</b> だけにチェックを入れて保存します。
+      万一キーが漏れても、ほかの用途に使われにくくなります。</li>
+    <li><b>キーをコピーして貼り付ける</b><br>
+      表示されたキー（英数字の長い文字列）をコピーし、初期設定の画面の「API キー」に貼り付けます。</li>
+  </ol>
+  <div class="box info"><b>無料枠の範囲で使えます</b>このツールは 1 分に 1 回だけ数字を確認するので、
+    1 日中動かしても 1 日の無料枠（10,000 回）の 15% ほどしか使いません。</div>
+  <div class="box warn"><b>「YouTube Data API v3」が見つからないとき</b>
+    Google Cloud の画面上部の検索欄に「YouTube Data API v3」と入力して探してください。
+    「有効にする」ではなく「管理」と出ていれば、すでに有効になっています。</div>
+</section>
+
+<!-- 4 -->
+<section class="page">
+  <h2><span class="step">4</span>OBS に表示する<span class="sub" style="font-weight:500">（最初の 1 回だけ）</span></h2>
+  <div class="grid2">
+    <div>
+      <ol class="steps">
+        <li>OBS の<b>「ソース」</b>欄の下にある<b>「＋」</b>を押します。</li>
+        <li>一覧から<b>「ブラウザ」</b>を選びます。</li>
+        <li>名前に「登録者数」などと入力して<b>「OK」</b>を押します。</li>
+        <li><b>「URL」</b>欄を次のように書き換えて<b>「OK」</b>を押します。幅と高さはそのままで大丈夫です。</li>
+      </ol>
+      <div class="url">http://localhost:8765/</div>
+      <p class="sub">アイコンを右クリックして「OBS 用の URL をコピー」を選ぶと、この URL をコピーできます。</p>
+    </div>
+    <div class="obs"><span class="tag" style="color:#aab;border-color:#556;margin:0 0 4px">イメージ</span>
+      <div class="row" style="align-items:flex-start">
+        <div class="panel" style="flex:1"><b>ソース</b>
+          <div style="margin-top:28px" class="row"><span class="hl" style="padding:0 6px;font-weight:700">＋</span><span>－</span><span>⚙</span></div>
+        </div>
+        <div class="menu" style="margin-top:6px;min-width:120px">
+          <div>画像</div><div>テキスト (GDI+)</div><div class="on hl">ブラウザ</div><div>映像キャプチャデバイス</div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:10px"><b>プロパティ「登録者数」</b>
+        <div class="row" style="margin-top:6px"><span style="width:40px">URL</span><span class="field hl" style="flex:1">http://localhost:8765/</span></div>
+        <div class="row" style="margin-top:4px"><span style="width:40px">幅</span><span class="field">800</span><span>高さ</span><span class="field">600</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>位置と大きさを調整する</h3>
+  <p>OBS のプレビュー画面で、赤い枠をドラッグして好きな位置に動かします。枠の角を引っぱると大きさが変わり、文字も枠に合わせて拡大・縮小します。</p>
+  <figure>
+    <div class="scene" style="position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden">
+      <div style="position:absolute;right:3%;top:4%;width:36%;aspect-ratio:16/9;outline:3px solid var(--red)">
+        <img src="img/counter.png" alt="" style="width:100%;height:100%">
+      </div>
+      <div style="position:absolute;left:4%;bottom:6%;color:#fff;font-weight:700;font-size:16pt;opacity:.6">ゲーム画面など</div>
+    </div>
+    <figcaption>配信画面の右上に置いた例。背景は透明なので、後ろの映像がそのまま見えます。</figcaption>
+  </figure>
+  <div class="box ok"><b>これで導入は完了です！</b>次は、お好みで文字や背景、アニメーションを変えてみましょう。</div>
+</section>
+
+<!-- 5 -->
+<section class="page">
+  <h2><span class="step">5</span>見た目を変える<span class="sub" style="font-weight:500">（お好みで）</span></h2>
+  <p class="lead">アイコンを右クリックして<b>「見た目を変える」</b>を選ぶと、ブラウザーで設定の画面が開きます。</p>
+  <figure class="shot"><img src="img/design.png" alt="見た目の設定の画面"></figure>
+  <ol class="steps" style="columns:2;column-gap:20px">
+    <li><b>プレビュー</b>：変更がすぐに映ります。市松模様の部分は透明です。</li>
+    <li><b>試すボタン</b>：「＋1 増やす」などで、アニメーションを試せます。</li>
+    <li><b>文字</b>：フォント、色、縁取り、大きさ、位置</li>
+    <li><b>アニメーション</b>：数字が変わるときの動きと、増えたときの演出</li>
+    <li><b>背景</b>：透明、単色、画像、動く画像、動画</li>
+    <li><b>保存</b>：押すと OBS の画面にも反映されます。押すまでは配信に影響しません。</li>
+  </ol>
+</section>
+
+<section class="page">
+  <h2><span class="step">5</span>アニメーションと演出</h2>
+  <p class="lead">数字が<b>増えたときは上へ</b>、<b>減ったときは下へ</b>動きます。動きは 7 種類から選べ、速さも変えられます。</p>
+
+  <div class="frames-head">スライド <span class="dir up">増えたとき ↑</span></div>
+  <div class="frames">
+    <img src="img/anim_slide_up_0.png" alt=""><img src="img/anim_slide_up_1.png" alt=""><img src="img/anim_slide_up_2.png" alt="">
+  </div>
+  <div class="frames-head">回転（メーター風） <span class="dir up">増えたとき ↑</span></div>
+  <div class="frames">
+    <img src="img/anim_odometer_up_0.png" alt=""><img src="img/anim_odometer_up_1.png" alt=""><img src="img/anim_odometer_up_2.png" alt="">
+  </div>
+  <div class="frames-head">回転（メーター風） <span class="dir down">減ったとき ↓</span></div>
+  <div class="frames">
+    <img src="img/anim_odometer_down_0.png" alt=""><img src="img/anim_odometer_down_1.png" alt=""><img src="img/anim_odometer_down_2.png" alt="">
+  </div>
+  <p class="sub center">左から「変わる前 → 途中 → 変わった後」</p>
+
+  <div class="kinds">
+    <div><b>なし</b>すぐに切り替わる</div>
+    <div><b>めくり</b>変わった桁がパタンとめくれる</div>
+    <div><b>スライド</b>数字全体が入れ替わる</div>
+    <div><b>カウントアップ</b>数えながら変わる</div>
+    <div><b>回転（メーター風）</b>変わった桁だけが回る</div>
+    <div><b>ポップ／バウンド</b>弾む／跳ねる</div>
+  </div>
+
+  <h3 style="margin-top:10px">増えたときの演出</h3>
+  <div class="grid3">
+    <figure style="margin:0"><img class="shot" src="img/fx_glow.png" alt=""><figcaption>光る</figcaption></figure>
+    <figure style="margin:0"><img class="shot" src="img/fx_sparkle.png" alt=""><figcaption>きらきら</figcaption></figure>
+    <figure style="margin:0"><img class="shot" src="img/fx_confetti.png" alt=""><figcaption>紙吹雪</figcaption></figure>
+  </div>
+  <p style="margin-top:8px">「自分の画像・動画」を選ぶと、用意した GIF や動画を 1 回だけ画面に重ねられます。</p>
+</section>
+
+<section class="page">
+  <h2><span class="step">5</span>フォントと背景を自分で用意する</h2>
+  <h3>フォント</h3>
+  <ul>
+    <li><b>パソコンに入っているフォント</b>：「フォント」欄に名前を入力するか、候補から選びます。
+      Chrome や Edge では「一覧を読み込む」でパソコンのフォントをすべて候補にできます。</li>
+    <li><b>ダウンロードしたフォント</b>：「フォントのファイル」の<b>「追加…」</b>から、ttf・otf・woff・woff2 のファイルを選びます。</li>
+  </ul>
+
+  <h3>背景</h3>
+  <p>「背景」で<b>「画像・動画」</b>を選び、<b>「追加…」</b>からファイルを選びます。</p>
+  <table>
+    <tr><th style="width:26%">種類</th><th style="width:30%">使えるファイル</th><th>メモ</th></tr>
+    <tr><td>止まった絵</td><td>png・jpg・webp</td><td>イラストや写真</td></tr>
+    <tr><td>動く絵</td><td>gif・webp・apng</td><td>アニメーション画像はそのまま動きます</td></tr>
+    <tr><td>動画</td><td>webm・mp4</td><td>音は出ず、繰り返し再生します。<b>OBS では webm が確実</b>です</td></tr>
+  </table>
+  <p>「合わせ方」で、画面を覆う・全体を収める・引き伸ばす・並べるを選べます。「濃さ」を下げると半透明になります。</p>
+
+  <div class="box info"><b>追加したファイルの扱い</b>ファイルはこのパソコンの中にだけ保存され、どこにも送信されません。
+    1 つ 200MB まで追加できます。いらなくなったら、画面下の「追加したファイル」から削除できます。</div>
+  <div class="box warn"><b>人が作った素材を使うときは</b>イラスト・フォント・動画には利用条件があります。
+    配信で使ってよいか（商用・収益化した配信での利用を含めて）、配布元の条件を確認してください。</div>
+</section>
+
+<!-- 6 -->
+<section class="page">
+  <h2><span class="step">6</span>毎回の使い方</h2>
+  <div class="grid2">
+    <div class="box info" style="margin:0"><b>配信を始めるとき</b>
+      <ol style="margin:4px 0 0;padding-left:1.4em"><li>「SubCounter.exe」をダブルクリック</li><li>OBS を起動</li></ol>
+    </div>
+    <div class="box info" style="margin:0"><b>配信が終わったら</b>
+      青いアイコンを右クリックして<b>「終了」</b>を選びます。
+    </div>
+  </div>
+  <p class="sub" style="margin-top:6px">ツールを起動していないと、OBS に数字は表示されません。</p>
+
+  <h3>アイコンのメニュー</h3>
+  <div class="grid2" style="grid-template-columns:auto 1fr">
+    <div class="menu" style="font-size:10pt">
+      <div class="dim">登録者数: 1230</div>
+      <div><b>OBS 用の URL をコピー</b></div>
+      <div>見た目を変える</div>
+      <div>設定を開く</div>
+      <div>今すぐ取得し直す</div>
+      <div>ログを開く</div>
+      <div>利用規約とプライバシー ›</div>
+      <div>終了</div>
+    </div>
+    <table style="margin:0">
+      <tr><th style="width:42%">項目</th><th>使うとき</th></tr>
+      <tr><td>一番上の灰色の文字</td><td>今の状態。問題があるときは理由が出ます</td></tr>
+      <tr><td>OBS 用の URL をコピー</td><td>OBS に URL を貼るとき</td></tr>
+      <tr><td>見た目を変える</td><td>文字・アニメーション・背景を変えるとき</td></tr>
+      <tr><td>設定を開く</td><td>API キーやチャンネルを変えるとき</td></tr>
+      <tr><td>今すぐ取得し直す</td><td>設定の問題を直したあと、すぐ再開したいとき</td></tr>
+      <tr><td>ログを開く</td><td>動作の記録を見るとき（問い合わせの際など）</td></tr>
+    </table>
+  </div>
+
+  <h3>知っておくと安心なこと</h3>
+  <ul>
+    <li>数字の確認は 1 分ごとです。YouTube 側の更新にも時間がかかるため、登録されてもすぐには変わらないことがあります。</li>
+    <li>一度数字が表示されたら、インターネットの不調などが起きても配信画面にエラーは出ず、直前の数字を表示し続けます。</li>
+    <li>見た目を保存すると、OBS を触らなくても配信画面に反映されます。</li>
+  </ul>
+</section>
+
+<!-- 7 -->
+<section class="page">
+  <h2><span class="step">7</span>困ったときは</h2>
+  <h3>OBS にこんな表示が出たら</h3>
+  <div class="grid2">
+    <figure style="margin:0"><img class="shot scene" src="img/notice_setup.png" alt="">
+      <figcaption>「初期設定をしてください」などの案内</figcaption></figure>
+    <figure style="margin:0"><img class="shot scene" src="img/notice_dash.png" alt="">
+      <figcaption>「---」</figcaption></figure>
+  </div>
+  <div class="grid2" style="margin-top:6px">
+    <p>設定に問題があります。アイコンを右クリックして<b>「設定を開く」</b>を選び、画面の案内どおりに直して保存してください。</p>
+    <p>インターネットの不調などで、まだ数字を受け取れていません。<b>自動でやり直す</b>ので、そのままお待ちください。</p>
+  </div>
+
+  <dl class="faq">
+    <dt>OBS に何も表示されない</dt>
+    <dd>① 画面右下に青いアイコンがあるか（なければ exe を起動）、② OBS の URL が <code>http://localhost:8765/</code> になっているか、
+      ③ OBS のソース一覧で目のマークが消えていないか、を確認してください。</dd>
+    <dt>「YouTube Data API v3 が有効になっていません」と出た</dt>
+    <dd>「API キーの作り方」の 2 をやり直し、そのあとアイコンのメニューから「今すぐ取得し直す」を選びます。</dd>
+    <dt>「登録者数が非公開になっています」と出た</dt>
+    <dd>YouTube Studio の設定で登録者数を公開にしてから、「今すぐ取得し直す」を選びます。</dd>
+    <dt>「API の 1 日の上限に達しました」と出た</dt>
+    <dd>無料枠を使い切っています。翌日の 16 時か 17 時（日本時間）に自動で再開します。</dd>
+    <dt>「すでに起動している可能性があります」と出た</dt>
+    <dd>ツールはすでに動いています。もう一度起動する必要はありません。</dd>
+    <dt>アニメーションや背景が OBS で動かない</dt>
+    <dd>OBS のブラウザソースを右クリックして「再読み込み」を押してください。動画の背景は webm 形式に変えると再生できることがあります。</dd>
+    <dt>数字が YouTube Studio と違う</dt>
+    <dd>1,000 人を超えると上から 3 桁より下が切り捨てられる仕様のためです（「始める前に」を参照）。</dd>
+  </dl>
+</section>
+
+<!-- 8 -->
+<section class="page">
+  <h2><span class="step">8</span>削除のしかた・規約について</h2>
+  <h3>ツールを削除する</h3>
+  <ol class="steps blue">
+    <li>アイコンのメニューから<b>「終了」</b>を選びます。</li>
+    <li>展開したフォルダーをごみ箱に入れます。</li>
+    <li>キーボードの <kbd>Windows</kbd> キーと <kbd>R</kbd> を同時に押し、<code>%LOCALAPPDATA%</code> と入力して「OK」を押します。</li>
+    <li>開いたフォルダーの中の<b>「SubCounter」</b>を削除します。設定・追加したファイル・動作の記録がすべて消えます。</li>
+    <li>不要になった API キーは、Google Cloud の「認証情報」の画面で削除してください。</li>
+  </ol>
+
+  <h3>利用規約とプライバシー</h3>
+  <ul>
+    <li>このツールは YouTube API Services を使用しています。使用することで
+      <b>YouTube 利用規約</b>（<code>https://www.youtube.com/t/terms</code>）に同意したものとみなされます。</li>
+    <li>Google による情報の取り扱いは <b>Google プライバシー ポリシー</b>（<code>https://policies.google.com/privacy</code>）をご確認ください。</li>
+    <li>このツールのプライバシーポリシーは、アイコンのメニューの「利用規約とプライバシー」からいつでも確認できます。</li>
+    <li>API キー・チャンネル・見た目の設定はお使いのパソコンの中にだけ保存し、API キーとチャンネル ID は登録者数を受け取るために Google にだけ送信します。</li>
+    <li>配信画面に出る「YouTube 登録者数」の表記は、データの出どころを示すために必要なので消せません。</li>
+  </ul>
+</section>
+
+</body>
+</html>
