@@ -7,7 +7,7 @@ $py = ".venv-build\Scripts\python.exe"
 & $py -m pip install --quiet -r requirements.txt pyinstaller
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-& $py -m PyInstaller --noconfirm --clean --onedir --noconsole --name YouTubeSubCounter --add-data "web;web" --hidden-import pystray._win32 server.py
+& $py -m PyInstaller --noconfirm --clean --onedir --noconsole --name YouTubeSubCounter --add-data "web;web" --add-data "config.example.json;." --hidden-import pystray._win32 --collect-all tzdata server.py
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
 Copy-Item docs\*.txt dist\YouTubeSubCounter\

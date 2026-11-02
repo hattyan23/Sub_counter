@@ -1,66 +1,41 @@
 """
-YouTube Studio から登録者数を取得するモジュール
+YouTube Data API v3 から登録者数を取得するモジュール
 
-Studio の画面構造や通信内容が変わったときに直す場所は、このファイルだけに閉じ込める。
+1,000 人以上の値は API の仕様で有効数字 3 桁に切り捨てられる。これを補正する処理は入れない。
 例外は外に出さず、すべて FetchResult として返す。
 
-Playwright の同期 API はスレッドをまたげないので、
-Fetcher のメソッドはすべて同じスレッドから呼ぶこと。
+リクエストの URL には API キーが含まれるので、URL や例外の文面をログに出さないこと。
 """
 import dataclasses
+import datetime
+import json
 import logging
-import os
-import pathlib
-import re
-import subprocess
-import sys
-import threading
-import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import zoneinfo
 
-from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-from playwright.sync_api import sync_playwright
+import config
 
-BASE = pathlib.Path(__file__).resolve().parent
-
-
-def data_dir():
-    """ログイン状態の保存先。配布版は exe の場所によらないようユーザーごとのフォルダに置く"""
-    override = os.environ.get("YT_COUNTER_DATA_DIR")
-    if override:
-        return pathlib.Path(override)
-    if getattr(sys, "frozen", False):
-        return pathlib.Path(os.environ["LOCALAPPDATA"]) / "YouTubeSubCounter"
-    return BASE
-
-
-PROFILE = data_dir() / "chrome_profile"   # ログイン状態はここに保存（Cookie は Windows 側で暗号化される）
-STUDIO = "https://studio.youtube.com/"
-CHROME_CANDIDATES = [
-    pathlib.Path(os.environ.get(env, "")) / "Google" / "Chrome" / "Application" / "chrome.exe"
-    for env in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA") if os.environ.get(env)
-]
-
-CHANNELS_API = "/youtubei/v1/creator/get_creator_channels"
-DOM_LABEL = "現在のチャンネル登録者数"
-# 画像・フォントは読み込まない。page.route は HTTP キャッシュを無効にしてしまい、
-# 読み込みごとに約 7MB かかる（CDP なら 2 回目以降は約 200KB）ので使わない。
-BLOCKED_URLS = ["*.png", "*.jpg", "*.jpeg", "*.webp", "*.gif", "*.svg", "*.woff", "*.woff2", "*.ttf",
-                "*i.ytimg.com/*", "*yt3.ggpht.com/*", "*yt3.googleusercontent.com/*", "*fonts.gstatic.com/*"]
-
-GOTO_TIMEOUT_MS = 30000
-# DOM は約 2 秒、内部通信は 11〜14 秒で届く。内部通信を優先するため、DOM が出ていてもここまでは待つ
-NET_WAIT_SEC = 20
-FETCH_TIMEOUT_SEC = 45
-POLL_MS = 500
+API_URL = "https://www.googleapis.com/youtube/v3/channels"
+TIMEOUT_SEC = 15
+RATE_LIMIT_PAUSE_SEC = 30 * 60
+QUOTA_TIMEZONE = "America/Los_Angeles"   # クォータはこの地域の 0 時にリセットされる
 
 # 状態
 OK = "ok"
-AUTH_EXPIRED = "auth_expired"   # 再ログインが必要
-NO_VALUE = "no_value"           # ページは開けたが値が見つからない
-ERROR = "error"                 # 読み込み失敗やブラウザの異常
-STARTING = "starting"           # 取得の完了待ち
-LOGIN_WAITING = "login_waiting" # ログイン用 Chrome が閉じられるのを待っている
+STARTING = "starting"                   # 最初の取得の完了待ち
+ERROR = "error"                         # 通信エラーやサーバーエラー（間隔を延ばして再試行）
+QUOTA_EXCEEDED = "quota_exceeded"       # クォータ超過（retry_after の間は取得しない）
+NOT_CONFIGURED = "not_configured"       # 設定ファイルの問題
+KEY_INVALID = "key_invalid"             # API キーの問題
+CHANNEL_NOT_FOUND = "channel_not_found"
+SUBSCRIBERS_HIDDEN = "subscribers_hidden"
+# 設定を直さない限り解決しないので再試行しない
+CONFIG_PROBLEMS = {NOT_CONFIGURED, KEY_INVALID, CHANNEL_NOT_FOUND, SUBSCRIBERS_HIDDEN}
+
+DAILY_QUOTA_REASONS = {"quotaExceeded", "dailyLimitExceeded"}
+RATE_LIMIT_REASONS = {"rateLimitExceeded", "userRateLimitExceeded"}
 
 log = logging.getLogger(__name__)
 
@@ -69,155 +44,112 @@ log = logging.getLogger(__name__)
 class FetchResult:
     status: str
     count: int | None = None
-    source: str | None = None   # "net" または "dom"
-    detail: str = ""
+    source: str | None = None   # 取得元。今は "api" のみ
+    detail: str = ""            # 利用者向けの説明。設定の値や URL を含めない
+    retry_after: float | None = None   # この秒数は取得しない
 
 
-def parse_count(value):
-    """丸めのない登録者数だけを int にする。「1.2万」のような表記は None"""
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value if value >= 0 else None
-    if isinstance(value, str) and re.fullmatch(r"\d+|\d{1,3}(,\d{3})+", value.strip()):
-        return int(value.strip().replace(",", ""))
-    return None
+def next_quota_reset(now=None):
+    """次にクォータがリセットされる時刻（夏時間に合わせて日本時間の 16 時と 17 時が切り替わる）"""
+    tz = zoneinfo.ZoneInfo(QUOTA_TIMEZONE)
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    tomorrow = now.astimezone(tz).date() + datetime.timedelta(days=1)
+    return datetime.datetime.combine(tomorrow, datetime.time(0), tz)
 
 
-def count_from_response(data):
-    """get_creator_channels のレスポンスから自分のチャンネルの登録者数を取り出す"""
+def seconds_until(moment, now=None):
+    # 同じタイムゾーン同士の引き算は夏時間の切り替えを無視するので、UTC に揃えてから引く
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    return (moment.astimezone(datetime.timezone.utc) - now.astimezone(datetime.timezone.utc)).total_seconds()
+
+
+def parse_response(data):
+    """channels.list のレスポンスを FetchResult にする"""
+    items = data.get("items") if isinstance(data, dict) else None
+    if not items:
+        return FetchResult(CHANNEL_NOT_FOUND, detail="チャンネルが見つかりません。チャンネル ID を確認してください")
+    statistics = items[0].get("statistics", {})
+    if statistics.get("hiddenSubscriberCount"):
+        return FetchResult(SUBSCRIBERS_HIDDEN, detail="このチャンネルは登録者数を非公開にしています")
+    value = statistics.get("subscriberCount")
+    if not isinstance(value, str) or not value.isdecimal():
+        return FetchResult(ERROR, detail="API の応答を読めませんでした")
+    return FetchResult(OK, int(value), "api")
+
+
+def error_reason(body):
+    """エラーレスポンスから原因のコードだけを取り出す"""
     try:
-        return parse_count(data["channels"][0]["metric"]["subscriberCount"])
-    except (KeyError, IndexError, TypeError):
-        return None
+        error = json.loads(body)["error"]
+        reason = error["errors"][0]["reason"]
+        if reason != "badRequest":
+            return reason
+        # キーが無効なときは reason が badRequest になり、詳しい原因は details に入ることがある
+        for detail in error.get("details", []):
+            if detail.get("reason"):
+                return detail["reason"]
+        return reason
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+        return ""
 
 
-def count_from_text(text):
-    """ページ本文から、見出し行の次の行にある登録者数を取り出す"""
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    for label, value in zip(lines, lines[1:]):
-        if label == DOM_LABEL:
-            return parse_count(value)
-    return None
-
-
-def find_chrome():
-    return next((p for p in CHROME_CANDIDATES if p.exists()), None)
-
-
-def _login_command():
-    return [find_chrome(), f"--user-data-dir={PROFILE}", "--no-first-run", "--no-default-browser-check", STUDIO]
-
-
-def focus_login():
-    """すでに開いているログイン用 Chrome を前面に出す（同じプロファイルで起動すると既存の窓が反応する）"""
-    subprocess.Popen(_login_command())
-
-
-def login(cancel):
-    """素の Chrome を開き、閉じられるまで待つ。
-    Playwright を介さないのは、自動化ブラウザからの Google ログインが拒否されやすいため"""
-    PROFILE.mkdir(parents=True, exist_ok=True)
-    log.warning("ログイン用の Chrome を開きます")
-    proc = subprocess.Popen(_login_command())
-    while proc.poll() is None:
-        if cancel.wait(1):
-            proc.terminate()
-            return
+def classify_http_error(code, reason):
+    if code >= 500:
+        return FetchResult(ERROR, detail=f"YouTube API のサーバーエラー（HTTP {code}）")
+    if reason in DAILY_QUOTA_REASONS:
+        reset = next_quota_reset()
+        return FetchResult(
+            QUOTA_EXCEEDED, retry_after=seconds_until(reset),
+            detail=f"API の 1 日の上限に達しました（{reset.astimezone():%m/%d %H:%M} まで停止）",
+        )
+    if reason in RATE_LIMIT_REASONS or code == 429:
+        return FetchResult(QUOTA_EXCEEDED, retry_after=RATE_LIMIT_PAUSE_SEC,
+                           detail="API の呼び出しが制限されました（30 分後に再開）")
+    if reason == "channelNotFound":
+        return FetchResult(CHANNEL_NOT_FOUND, detail="チャンネルが見つかりません。チャンネル ID を確認してください")
+    if reason == "accessNotConfigured":
+        return FetchResult(KEY_INVALID, detail="YouTube Data API v3 が有効になっていません。Google Cloud の設定を確認してください")
+    return FetchResult(KEY_INVALID, detail=f"API キーを確認してください（{reason or f'HTTP {code}'}）")
 
 
 class Fetcher:
-    def __init__(self, cancel=None):
-        self._cancel = cancel or threading.Event()
-        self._playwright = None
-        self._ctx = None
-        self._page = None
-        self._user_agent = None
-        self._responses = []
+    def __init__(self):
+        self.interval = config.DEFAULT_INTERVAL_SEC
+        self._seen_config = None
 
     def fetch(self):
-        """1 回取得する。内部通信 → DOM の順に値を決める。例外は投げない"""
-        if not PROFILE.exists():
-            return FetchResult(AUTH_EXPIRED, detail="プロファイルがありません")
+        """1 回取得する。例外は投げない"""
+        self._seen_config = config.signature()
         try:
-            self._ensure_browser()
-            return self._load_and_read()
-        except PlaywrightTimeoutError as e:
-            return FetchResult(ERROR, detail=type(e).__name__)
+            cfg = config.load()
+        except config.ConfigError as e:
+            return FetchResult(NOT_CONFIGURED, detail=str(e))
+        self.interval = cfg.interval_sec
+        try:
+            return self._request(cfg)
+        except urllib.error.HTTPError as e:
+            with e:
+                return classify_http_error(e.code, error_reason(e.read()))
+        except (urllib.error.URLError, OSError):
+            return FetchResult(ERROR, detail="通信エラー")
+        except ValueError:
+            return FetchResult(ERROR, detail="API の応答を読めませんでした")
         except Exception as e:
-            # ブラウザが落ちた可能性があるので、次回は起動し直す
-            self.close()
             return FetchResult(ERROR, detail=type(e).__name__)
+
+    def config_changed(self):
+        return config.signature() != self._seen_config
 
     def close(self):
-        for closer in (self._ctx and self._ctx.close, self._playwright and self._playwright.stop):
-            if closer:
-                try:
-                    closer()
-                except Exception as e:
-                    log.debug("終了処理で例外: %s", type(e).__name__)
-        self._ctx = self._page = self._playwright = None
+        pass
 
-    def _ensure_browser(self):
-        if self._page:
-            return
-        if not self._playwright:
-            self._playwright = sync_playwright().start()
-        chromium = self._playwright.chromium
-        opts = dict(channel="chrome", headless=True)
-        if not self._user_agent:
-            # ヘッドレス Chrome は UA に "HeadlessChrome" が入り、Studio に非対応ブラウザ扱いされる。
-            # 一度起動して UA を読み、"Chrome" に置き換えて起動し直す。
-            tmp = chromium.launch_persistent_context(str(PROFILE), **opts)
-            try:
-                page = tmp.pages[0] if tmp.pages else tmp.new_page()
-                self._user_agent = page.evaluate("navigator.userAgent").replace("HeadlessChrome", "Chrome")
-            finally:
-                tmp.close()
-        self._ctx = chromium.launch_persistent_context(str(PROFILE), user_agent=self._user_agent, **opts)
-        self._ctx.on("response", self._on_response)
-        self._page = self._ctx.new_page()
-        cdp = self._ctx.new_cdp_session(self._page)
-        cdp.send("Network.enable")
-        cdp.send("Network.setBlockedURLs", {"urls": BLOCKED_URLS})
-
-    def _on_response(self, res):
-        # ここでは本文を読まず、待機ループ側でまとめて読む
-        if CHANNELS_API in res.url:
-            self._responses.append(res)
-
-    def _load_and_read(self):
-        self._responses.clear()
-        self._page.goto(STUDIO, wait_until="domcontentloaded", timeout=GOTO_TIMEOUT_MS)
-
-        start = time.monotonic()
-        while time.monotonic() - start < FETCH_TIMEOUT_SEC and not self._cancel.is_set():
-            if "accounts.google.com" in self._page.url:
-                return FetchResult(AUTH_EXPIRED, detail="ログイン画面に転送されました")
-            count = self._read_responses()
-            if count is not None:
-                return FetchResult(OK, count, "net")
-            count = self._read_dom()
-            if count is not None and time.monotonic() - start >= NET_WAIT_SEC:
-                return FetchResult(OK, count, "dom")
-            self._page.wait_for_timeout(POLL_MS)
-        return FetchResult(NO_VALUE, detail="時間内に値が見つかりませんでした")
-
-    def _read_responses(self):
-        pending, self._responses = self._responses, []
-        for res in pending:
-            try:
-                count = count_from_response(res.json())
-            except (PlaywrightError, ValueError):
-                continue  # OPTIONS やエラー応答など、JSON でないものは飛ばす
-            if count is not None:
-                return count
-        return None
-
-    def _read_dom(self):
-        try:
-            return count_from_text(self._page.evaluate("document.body ? document.body.innerText : ''"))
-        except PlaywrightError:
-            if self._page.is_closed():
-                raise
-            return None  # 転送中でページの文脈が入れ替わっただけ
+    @staticmethod
+    def _request(cfg):
+        query = urllib.parse.urlencode({
+            "part": "statistics",
+            "id": cfg.channel_id,
+            "key": cfg.api_key,
+            "fields": "items(statistics)",
+        })
+        with urllib.request.urlopen(f"{API_URL}?{query}", timeout=TIMEOUT_SEC) as res:
+            return parse_response(json.load(res))

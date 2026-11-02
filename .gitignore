@@ -1,9 +1,6 @@
-# 認証情報が入っているので絶対にコミットしない
-chrome_profile/
+# API キーが入っているので絶対にコミットしない
+config.json
 
-# 調査用の出力
-dumps/
-watch_*.csv
 *.log
 
 build/

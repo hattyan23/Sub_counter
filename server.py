@@ -2,7 +2,9 @@
 登録者数の取得ループと配信サーバーを 1 プロセスで動かす
 
 使い方:
-  python server.py [--port=8765] [--interval=60]
+  python server.py [--port=8765]
+
+  API キーなどの設定は config.json に書く（config.example.json が見本）
 
   /            確認用の画面
   /api/count   現在の値（JSON）
@@ -19,14 +21,15 @@ import sys
 import threading
 import time
 
+import config
 import fetcher
 import tray
 
 BASE = pathlib.Path(__file__).resolve().parent
 INDEX_HTML = BASE / "web" / "index.html"
-LOG_PATH = fetcher.data_dir() / "app.log"
+LOG_PATH = config.data_dir() / "app.log"
 HOST = "127.0.0.1"   # 外部に公開しない
-MIN_INTERVAL_SEC = 60   # YouTube への負荷を抑えるため、これより短くしない
+MAX_BACKOFF_SEC = 30 * 60
 HEARTBEAT_SEC = 15
 
 log = logging.getLogger("server")
@@ -39,7 +42,8 @@ class CounterState:
         self._changed = threading.Condition()
         self._version = 0
         self._count = None
-        self._status = "starting"
+        self._status = fetcher.STARTING
+        self._detail = ""
         self._updated_at = None
 
     def apply(self, result):
@@ -47,8 +51,8 @@ class CounterState:
             count = result.count if result.status == fetcher.OK else self._count
             if result.status == fetcher.OK:
                 self._updated_at = time.time()
-            if (count, result.status) != (self._count, self._status):
-                self._count, self._status = count, result.status
+            if (count, result.status, result.detail) != (self._count, self._status, self._detail):
+                self._count, self._status, self._detail = count, result.status, result.detail
                 self._version += 1
                 self._changed.notify_all()
 
@@ -68,55 +72,53 @@ class CounterState:
             return self._version
 
     def _snapshot(self):
-        return {"count": self._count, "status": self._status, "updated_at": self._updated_at}
+        return {"count": self._count, "status": self._status, "detail": self._detail, "updated_at": self._updated_at}
 
 
-def wait_next(stop, login_request, interval):
-    """次の取得まで待つ。ログインを頼まれたらすぐ戻る"""
-    deadline = time.monotonic() + interval
-    while not stop.is_set() and not login_request.is_set():
-        left = deadline - time.monotonic()
+def wait_next(stop, source, seconds):
+    """次の取得まで待つ。seconds が None なら設定が変わるまで待つ。設定が変わったらすぐ戻る"""
+    deadline = None if seconds is None else time.monotonic() + seconds
+    while not stop.is_set() and not source.config_changed():
+        left = 1 if deadline is None else deadline - time.monotonic()
         if left <= 0:
             return
         stop.wait(min(left, 1))
 
 
-def fetch_loop(source, state, stop, interval, login=None, login_request=None, on_session_lost=None):
+def fetch_loop(source, state, stop, on_config_problem=None):
     """取得を繰り返す。どんな例外が起きてもループは止めない"""
-    interval = max(interval, MIN_INTERVAL_SEC)
-    login_request = login_request or threading.Event()
-    login_offered = False   # ログインせずに閉じられたとき、Chrome を開き続けないようにする
+    failures = 0
+    last_problem = None   # 同じ設定の問題を何度も知らせないようにする
     try:
         while not stop.is_set():
-            if login and login_request.is_set():
-                login_request.clear()
-                source.close()   # 同じプロファイルは同時に開けない
-                state.apply(fetcher.FetchResult(fetcher.LOGIN_WAITING))
-                login(stop)
-                state.apply(fetcher.FetchResult(fetcher.STARTING))
-                continue
             try:
                 result = source.fetch()
             except Exception as e:
                 result = fetcher.FetchResult(fetcher.ERROR, detail=type(e).__name__)
-            if not stop.is_set():
-                state.apply(result)
+            if stop.is_set():
+                break
+            state.apply(result)
+
             if result.status == fetcher.OK:
-                login_offered = False
+                failures = 0
+                last_problem = None
+                wait = source.interval
                 log.info("取得: %d (%s)", result.count, result.source)
-            elif result.status == fetcher.AUTH_EXPIRED:
-                log.warning("ログインが必要です: %s", result.detail)
-                if not login_offered:
-                    login_offered = True
-                    if state.snapshot()["count"] is None:
-                        login_request.set()
-                        continue
-                    # 配信中かもしれないので、窓は開かず通知だけにする（数字は表示し続ける）
-                    if on_session_lost:
-                        on_session_lost()
+            elif result.status in fetcher.CONFIG_PROBLEMS:
+                wait = None
+                log.warning("取得を停止しました (%s): %s", result.status, result.detail)
+                if on_config_problem and result.status != last_problem:
+                    on_config_problem(result)
+                last_problem = result.status
+            elif result.retry_after is not None:
+                wait = result.retry_after
+                log.warning("取得を一時停止します (%s): %s", result.status, result.detail)
             else:
-                log.warning("取得失敗 (%s): %s", result.status, result.detail)
-            wait_next(stop, login_request, interval)
+                failures += 1
+                # 間隔が上限より長い設定でも、設定より短い間隔では再試行しない
+                wait = min(source.interval * 2 ** failures, max(MAX_BACKOFF_SEC, source.interval))
+                log.warning("取得失敗 (%s): %s。%d 秒後に再試行します", result.status, result.detail, wait)
+            wait_next(stop, source, wait)
     finally:
         source.close()
 
@@ -179,41 +181,29 @@ def raise_interrupt(*_):
     raise KeyboardInterrupt
 
 
-class LoginFlow:
-    def __init__(self):
-        self.requested = threading.Event()
-        self._running = threading.Event()
-        self._chrome_open = threading.Event()
+class ConfigProblemNotifier:
+    """設定の問題を知らせる。数字を表示できているときは、配信中かもしれないので通知だけにする"""
 
-    def run(self, cancel):
-        """案内を出してから Chrome を開く。OK を押した直後なら Chrome が裏に隠れない"""
-        self._running.set()
-        try:
-            if not fetcher.find_chrome():
-                tray.message_box_until("Google Chrome が見つかりません。\nインストールしてから、もう一度起動してください。", cancel)
-                return
-            tray.message_box_until("YouTube Studio にログインします。\n\n「OK」を押すと Chrome が開きます。\n"
-                                   "1. Google にログインしてください\n"
-                                   "2. YouTube Studio が表示されたら、Chrome を閉じてください", cancel)
-            if cancel.is_set():
-                return
-            self._chrome_open.set()
-            fetcher.login(cancel)
-        finally:
-            self._chrome_open.clear()
-            self._running.clear()
+    def __init__(self, state, icon, stop):
+        self._state = state
+        self._icon = icon
+        self._stop = stop
+        self._prompted = False
 
-    def open(self):
-        """トレイのメニューから呼ばれる"""
-        if self._chrome_open.is_set():
-            fetcher.focus_login()
-        elif not self._running.is_set():
-            self.requested.set()
+    def __call__(self, result):
+        if self._prompted or self._state.snapshot()["count"] is not None:
+            self._icon.notify(f"{result.detail}\n設定を直して保存すると、自動で再開します")
+            return
+        self._prompted = True
+        tray.message_box_until(f"{result.detail}\n\n「OK」を押すと設定ファイルを開きます。\n"
+                               "設定を直して保存すると、自動で再開します。", self._stop)
+        if not self._stop.is_set():
+            config.open_in_editor()
 
 
 def setup_logging():
-    """配布版にはコンソールがないのでファイルにも残す。認証情報は出力しないこと"""
-    fetcher.data_dir().mkdir(parents=True, exist_ok=True)
+    """配布版にはコンソールがないのでファイルにも残す。API キーは出力しないこと"""
+    config.data_dir().mkdir(parents=True, exist_ok=True)
     handlers = [logging.handlers.RotatingFileHandler(LOG_PATH, maxBytes=1_000_000, backupCount=1, encoding="utf-8")]
     if sys.stderr:
         handlers.append(logging.StreamHandler())
@@ -223,10 +213,9 @@ def setup_logging():
 def main():
     parser =argparse.ArgumentParser(description="YouTube 登録者数カウンターのサーバー")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--interval", type=int, default=MIN_INTERVAL_SEC,
-                        help=f"取得の待機秒数（{MIN_INTERVAL_SEC} 未満は {MIN_INTERVAL_SEC} として扱う）")
     args = parser.parse_args()
     setup_logging()
+    config.ensure_file()
 
     state = CounterState()
     try:
@@ -242,14 +231,11 @@ def main():
 
     stop = threading.Event()
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    flow = LoginFlow()
-    icon = tray.Tray(state, f"http://localhost:{args.port}/", LOG_PATH, on_login=flow.open, on_exit=stop.set)
+    icon = tray.Tray(state, f"http://localhost:{args.port}/", LOG_PATH, on_exit=stop.set)
     icon.start()
     worker = threading.Thread(
-        target=fetch_loop, args=(fetcher.Fetcher(cancel=stop), state, stop, args.interval, flow.run, flow.requested),
-        kwargs={"on_session_lost": lambda: icon.notify(
-            "ログインが切れました。数字は直前の値のまま止まります。\n"
-            "配信の合間に、アイコンの右クリックから「ログイン画面を開く」を選んでください")},
+        target=fetch_loop,
+        args=(fetcher.Fetcher(), state, stop, ConfigProblemNotifier(state, icon, stop)),
         daemon=True,
     )
     worker.start()
@@ -265,7 +251,7 @@ def main():
         icon.stop()
         server.shutdown()
         server.server_close()
-        worker.join(timeout=fetcher.GOTO_TIMEOUT_MS / 1000 + 5)
+        worker.join(timeout=fetcher.TIMEOUT_SEC + 5)
 
 
 if __name__ == "__main__":

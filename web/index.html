@@ -12,6 +12,7 @@
   #count { font-size: min(25vw, 90vh); line-height: 1; }
   #notice { font-size: min(5vw, 12vh); line-height: 1.5; padding: 0 4vw; }
   #notice small { display: block; font-size: .65em; }
+  #count.placeholder { opacity: .5; }
 </style>
 </head>
 <body>
@@ -20,16 +21,16 @@
 <script>
   const countEl = document.getElementById("count");
   const noticeEl = document.getElementById("notice");
-  // 数字がまだないときだけ案内を出す。一度表示できたら、取得に失敗しても
-  // サーバーは前回の値を送るので、配信画面にエラーは出さない。
+  // 数字がまだないときだけ、設定の問題なら案内を、それ以外（一時的な問題など）なら「---」を出す。
+  // 一度表示できたら、取得に失敗してもサーバーは前回の値を送るので、配信画面にエラーは出さない。
   // 接続が切れた場合は EventSource が自動で再接続する。
+  const OPEN_SETTINGS = "画面右下の赤いアイコンを右クリックして「設定を開く」を選んでください";
   const NOTICES = {
-    login_waiting: ["Chrome で Google にログインしてください", "終わったら Chrome を閉じると、ここに登録者数が出ます"],
-    auth_expired: ["ログインが必要です", "画面右下の赤いアイコンを右クリックして「ログイン画面を開く」を選んでください"],
-    error: ["登録者数を取得できません", "自動でやり直しています。しばらくお待ちください"],
-    no_value: ["登録者数を取得できません", "自動でやり直しています。しばらくお待ちください"],
+    not_configured: ["API キーとチャンネル ID を設定してください", OPEN_SETTINGS],
+    key_invalid: ["API キーを確認してください", OPEN_SETTINGS],
+    channel_not_found: ["チャンネル ID を確認してください", OPEN_SETTINGS],
+    subscribers_hidden: ["登録者数が非公開になっています", "YouTube の設定で登録者数を公開してください"],
   };
-  const DEFAULT_NOTICE = ["登録者数を取得しています", "20 秒ほどお待ちください"];
 
   function showNotice([title, detail]) {
     noticeEl.textContent = title;
@@ -40,12 +41,11 @@
 
   new EventSource("/events").onmessage = (e) => {
     const { count, status } = JSON.parse(e.data);
-    if (count !== null) {
-      countEl.textContent = count;
-      noticeEl.replaceChildren();
-    } else {
-      showNotice(NOTICES[status] || DEFAULT_NOTICE);
-    }
+    const notice = count === null ? NOTICES[status] : null;
+    noticeEl.replaceChildren();
+    countEl.classList.toggle("placeholder", count === null);
+    countEl.textContent = count !== null ? count : notice ? "" : "---";
+    if (notice) showNotice(notice);
   };
 </script>
 </body>

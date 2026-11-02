@@ -8,7 +8,7 @@ import threading
 import pystray
 from PIL import Image, ImageDraw
 
-import fetcher
+import config
 
 TITLE = "YouTube 登録者数カウンター"
 MB_ICONINFORMATION = 0x40
@@ -45,21 +45,17 @@ def make_image():
 
 
 def status_text(snapshot):
-    if snapshot["status"] == fetcher.LOGIN_WAITING:
-        return "ログイン中（終わったら Chrome を閉じてください）"
-    if snapshot["status"] == fetcher.AUTH_EXPIRED:
-        return "ログインが必要です"
-    if snapshot["count"] is None:
-        return "取得中…"
-    return f"登録者数: {snapshot['count']}"
+    count, detail = snapshot["count"], snapshot["detail"]
+    if count is None:
+        return detail or "取得中…"
+    return f"登録者数: {count}（{detail}）" if detail else f"登録者数: {count}"
 
 
 class Tray:
-    def __init__(self, state, url, log_path, on_login, on_exit):
+    def __init__(self, state, url, log_path, on_exit):
         self._state = state
         self._url = url
         self._log_path = log_path
-        self._on_login = on_login
         self._on_exit = on_exit
         self.icon = None
 
@@ -80,7 +76,7 @@ class Tray:
         self.icon = pystray.Icon("YouTubeSubCounter", make_image(), TITLE, pystray.Menu(
             pystray.MenuItem(lambda _: status_text(self._state.snapshot()), None, enabled=False),
             pystray.MenuItem("OBS 用の URL をコピー", self._copy_url, default=True),
-            pystray.MenuItem("ログイン画面を開く", lambda icon, item: self._on_login()),
+            pystray.MenuItem("設定を開く", lambda icon, item: config.open_in_editor()),
             pystray.MenuItem("ログを開く", self._open_log),
             pystray.MenuItem("終了", self._exit),
         ))
