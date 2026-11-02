@@ -44,6 +44,8 @@ DEFAULTS = {
     "label_size": 100,          # %
     "label_x": 50,              # free のときの位置（%）
     "label_y": 80,
+    "label_loop": "none",       # 「YouTube 登録者数」をずっと動かすアニメーション
+    "label_loop_ms": 2000,      # 1 回の動きにかける時間
     "animation": "slide",
     "duration_ms": 800,
     "effect": "none",           # 増えたときだけの演出
@@ -57,6 +59,7 @@ DEFAULTS = {
 CHOICES = {
     "font_weight": (400, 700, 900),
     "label_place": ("below", "above", "free"),
+    "label_loop": ("none", "float", "hop", "pulse", "sway", "blink", "glow"),
     "animation": ANIMATIONS,
     "effect": EFFECTS,
     "bg_type": ("none", "color", "asset"),
@@ -64,6 +67,7 @@ CHOICES = {
 }
 RANGES = {"size": (30, 300), "outline": (0, 10), "pos_x": (0, 100), "pos_y": (0, 100),
           "label_size": (30, 300), "label_x": (0, 100), "label_y": (0, 100),
+          "label_loop_ms": (500, 10000),
           "duration_ms": (200, 5000), "bg_opacity": (0, 100)}
 COLORS = {"color", "outline_color", "bg_color"}
 BOOLS = {"shadow", "separator"}
@@ -73,7 +77,8 @@ LABELS = {
     "color": "文字の色", "outline_color": "縁取りの色", "outline": "縁取りの太さ", "shadow": "影", "separator": "カンマ",
     "pos_x": "横の位置", "pos_y": "縦の位置", "label_place": "「YouTube 登録者数」の位置",
     "label_size": "「YouTube 登録者数」の大きさ", "label_x": "「YouTube 登録者数」の横の位置",
-    "label_y": "「YouTube 登録者数」の縦の位置", "animation": "アニメーション", "duration_ms": "アニメーションの長さ",
+    "label_y": "「YouTube 登録者数」の縦の位置", "label_loop": "「YouTube 登録者数」のループアニメーション",
+    "label_loop_ms": "ループアニメーションの速さ", "animation": "アニメーション", "duration_ms": "アニメーションの長さ",
     "effect": "増えたときの演出", "effect_asset": "演出の素材", "bg_type": "背景の種類", "bg_color": "背景の色",
     "bg_asset": "背景の素材", "bg_fit": "背景の合わせ方", "bg_opacity": "背景の濃さ",
 }

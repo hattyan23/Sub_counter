@@ -155,6 +155,23 @@
         <label for="label_y">縦の位置</label>
         <div class="row"><input type="range" id="label_y" min="0" max="100"><output data-for="label_y" data-unit="%"></output></div>
       </div>
+      <div class="field">
+        <label for="label_loop">ループアニメーション</label>
+        <select id="label_loop">
+          <option value="none">なし</option>
+          <option value="float">ふわふわ（上下にゆっくり）</option>
+          <option value="hop">ぴょんぴょん（跳ねる）</option>
+          <option value="pulse">ドキドキ（大きく・小さく）</option>
+          <option value="sway">ゆらゆら（左右に傾く）</option>
+          <option value="blink">点滅（ゆっくり薄くなる）</option>
+          <option value="glow">きらめき（明るく光る）</option>
+        </select>
+        <p class="sub note">数字が変わらなくても、ずっと動き続けます。</p>
+      </div>
+      <div class="field" data-show="label_loop=float,hop,pulse,sway,blink,glow">
+        <label for="label_loop_ms">速さ</label>
+        <div class="row"><input type="range" id="label_loop_ms" min="500" max="10000" step="100"><output data-for="label_loop_ms" data-unit="秒で 1 回" data-scale="0.001"></output></div>
+      </div>
     </section>
 
     <section>
@@ -244,14 +261,15 @@
   history.replaceState(null, "", location.pathname);
   const $ = (id) => document.getElementById(id);
   const headers = { "X-Settings-Token": token };
-  const NUMBERS = ["font_weight", "size", "outline", "pos_x", "pos_y", "label_size", "label_x", "label_y", "duration_ms",
+  const NUMBERS = ["font_weight", "size", "outline", "pos_x", "pos_y", "label_size", "label_x", "label_y", "label_loop_ms", "duration_ms",
                    "bg_opacity"];
   const KEYS = ["font_family", "font_asset", "font_weight", "size", "color", "outline_color", "outline", "shadow", "separator",
-                "pos_x", "pos_y", "label_place", "label_size", "label_x", "label_y", "animation", "duration_ms", "effect", "effect_asset", "bg_type", "bg_color", "bg_asset",
+                "pos_x", "pos_y", "label_place", "label_size", "label_x", "label_y", "label_loop", "label_loop_ms", "animation", "duration_ms", "effect", "effect_asset", "bg_type", "bg_color", "bg_asset",
                 "bg_fit", "bg_opacity"];
   const DEFAULTS = { font_family: "", font_asset: "", font_weight: 700, size: 100, color: "#ffffff", outline_color: "#000000",
                      outline: 3, shadow: true, separator: false, pos_x: 50, pos_y: 50, label_place: "below",
-                     label_size: 100, label_x: 50, label_y: 80, animation: "slide", duration_ms: 800,
+                     label_size: 100, label_x: 50, label_y: 80, label_loop: "none", label_loop_ms: 2000,
+                     animation: "slide", duration_ms: 800,
                      effect: "none", effect_asset: "", bg_type: "none", bg_color: "#000000", bg_asset: "", bg_fit: "cover",
                      bg_opacity: 100 };
   const FONT_SUGGESTIONS = ["Yu Gothic", "Yu Gothic UI", "Meiryo", "BIZ UDPGothic", "BIZ UDGothic", "MS Gothic", "Yu Mincho",

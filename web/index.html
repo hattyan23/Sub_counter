@@ -27,6 +27,15 @@
   #source { display: block; font-size: .16em; line-height: 1.4; white-space: nowrap; }
   /* 自由な位置に置くときは、数字とは別に画面に対する位置で置く */
   #source.free { position: fixed; }
+  /* 「YouTube 登録者数」のループアニメーション。位置合わせの変形と重ならないよう、内側の文字を動かす */
+  #source-text { display: inline-block; }
+  @keyframes loop-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.25em); } }
+  @keyframes loop-hop { 0%, 60%, 100% { transform: translateY(0); } 20% { transform: translateY(-.45em); }
+                        40% { transform: translateY(.04em); } }
+  @keyframes loop-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+  @keyframes loop-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+  @keyframes loop-blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  @keyframes loop-glow { 0%, 100% { filter: none; } 50% { filter: brightness(1.5) drop-shadow(0 0 .25em currentColor); } }
   #notice { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; text-align: center;
             font: 700 min(5vw, 12vh)/1.5 sans-serif; padding: 0 4vw; color: #fff;
             text-shadow: 0 0 .08em #000, 0 0 .08em #000, 0 0 .2em #000; }
@@ -37,12 +46,12 @@
 </head>
 <body>
 <div id="bg"></div>
-<div id="stage"><div id="count"></div><div id="source"></div></div>
+<div id="stage"><div id="count"></div><div id="source"><span id="source-text"></span></div></div>
 <div id="fx"></div>
 <div id="notice"></div>
 <script>
   const $ = (id) => document.getElementById(id);
-  const countEl = $("count"), sourceEl = $("source"), noticeEl = $("notice"), stageEl = $("stage"), bgEl = $("bg"), fxEl = $("fx");
+  const countEl = $("count"), sourceEl = $("source"), sourceTextEl = $("source-text"), noticeEl = $("notice"), stageEl = $("stage"), bgEl = $("bg"), fxEl = $("fx");
   const preview = new URLSearchParams(location.search).has("preview");
   const assetUrl = (name) => `/assets/${encodeURIComponent(name)}`;
   const isVideo = (name) => /\.(webm|mp4)$/i.test(name);
@@ -284,7 +293,7 @@
       noticeEl.append(notice[0], small);
     }
     countEl.classList.toggle("placeholder", count === null);
-    sourceEl.textContent = count !== null ? "YouTube 登録者数" : "";
+    sourceTextEl.textContent = count !== null ? "YouTube 登録者数" : "";
     if (count === null) {
       gen++;
       shown = null;
@@ -356,6 +365,7 @@
   function applyLabel(d) {
     const free = d.label_place === "free";
     stageEl.classList.toggle("above", d.label_place === "above");
+    sourceTextEl.style.animation = d.label_loop === "none" ? "" : `loop-${d.label_loop} ${d.label_loop_ms}ms ease-in-out infinite`;
     sourceEl.classList.toggle("free", free);
     if (free) {
       document.body.append(sourceEl);
@@ -386,7 +396,8 @@
   // 見た目を読めなかったときの最低限の表示
   const FALLBACK = { font_family: "", font_asset: "", font_weight: 700, size: 100, color: "#ffffff", outline_color: "#000000",
                      outline: 3, shadow: true, separator: false, pos_x: 50, pos_y: 50, label_place: "below",
-                     label_size: 100, label_x: 50, label_y: 80, animation: "none", duration_ms: 800,
+                     label_size: 100, label_x: 50, label_y: 80, label_loop: "none", label_loop_ms: 2000,
+                     animation: "none", duration_ms: 800,
                      effect: "none", effect_asset: "", bg_type: "none", bg_color: "#000000", bg_asset: "", bg_fit: "cover",
                      bg_opacity: 100 };
 
