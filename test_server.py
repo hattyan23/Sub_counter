@@ -2,6 +2,7 @@
 import http.client
 import json
 import threading
+import time
 import unittest
 from unittest import mock
 
@@ -50,10 +51,9 @@ class FetchLoopTest(unittest.TestCase):
         stop = threading.Event()
         source = mock.Mock()
         source.fetch.side_effect = RuntimeError("boom")
-        waits = []
-        stop.wait = lambda seconds: (waits.append(seconds), stop.set())
-        server.fetch_loop(source, server.CounterState(), stop, interval=1)
-        self.assertEqual(waits, [server.MIN_INTERVAL_SEC])
+        with mock.patch("server.wait_next", side_effect=lambda stop, _, interval: stop.set()) as wait_next:
+            server.fetch_loop(source, server.CounterState(), stop, interval=1)
+        self.assertEqual(wait_next.call_args.args[2], server.MIN_INTERVAL_SEC)
         source.close.assert_called_once()
 
 
@@ -62,10 +62,45 @@ class FetchLoopTest(unittest.TestCase):
         source = mock.Mock()
         source.fetch.return_value = FetchResult(fetcher.AUTH_EXPIRED)
         login = mock.Mock()
-        stop.wait = lambda seconds: stop.set()
-        server.fetch_loop(source, server.CounterState(), stop, 60, login=login)
+        with mock.patch("server.wait_next", side_effect=lambda stop, *_: stop.set()):
+            server.fetch_loop(source, server.CounterState(), stop, 60, login=login)
         login.assert_called_once_with(stop)
         self.assertEqual(source.fetch.call_count, 2)  # ログイン直後は待たずに取り直す
+
+    def test_session_lost_with_value_only_notifies(self):
+        stop = threading.Event()
+        state = server.CounterState()
+        state.apply(FetchResult(fetcher.OK, 680, "net"))
+        source = mock.Mock()
+        source.fetch.return_value = FetchResult(fetcher.AUTH_EXPIRED)
+        login, lost = mock.Mock(), mock.Mock()
+        with mock.patch("server.wait_next", side_effect=lambda stop, *_: stop.set()):
+            server.fetch_loop(source, state, stop, 60, login=login, on_session_lost=lost)
+        login.assert_not_called()
+        lost.assert_called_once()
+        self.assertEqual(state.snapshot()["count"], 680)
+
+    def test_menu_request_runs_login_and_status_flows(self):
+        stop = threading.Event()
+        state = server.CounterState()
+        state.apply(FetchResult(fetcher.OK, 680, "net"))
+        request = threading.Event()
+        request.set()
+        source = mock.Mock()
+        source.fetch.return_value = FetchResult(fetcher.OK, 681, "net")
+        statuses = []
+        login = mock.Mock(side_effect=lambda _: statuses.append(state.snapshot()["status"]))
+        with mock.patch("server.wait_next", side_effect=lambda stop, *_: stop.set()):
+            server.fetch_loop(source, state, stop, 60, login=login, login_request=request)
+        self.assertEqual(statuses, [fetcher.LOGIN_WAITING])
+        self.assertEqual(state.snapshot()["count"], 681)
+
+    def test_wait_next_wakes_on_login_request(self):
+        stop, request = threading.Event(), threading.Event()
+        request.set()
+        started = time.monotonic()
+        server.wait_next(stop, request, 60)
+        self.assertLess(time.monotonic() - started, 1)
 
 
 class ServerTest(unittest.TestCase):

@@ -28,6 +28,14 @@ def message_box(text, wait=True):
         threading.Thread(target=show, daemon=True).start()
 
 
+def message_box_until(text, cancel):
+    """メッセージが閉じられるか cancel が立つまで待つ"""
+    thread = threading.Thread(target=message_box, args=(text,), daemon=True)
+    thread.start()
+    while thread.is_alive() and not cancel.wait(0.2):
+        pass
+
+
 def make_image():
     image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
@@ -37,6 +45,8 @@ def make_image():
 
 
 def status_text(snapshot):
+    if snapshot["status"] == fetcher.LOGIN_WAITING:
+        return "ログイン中（終わったら Chrome を閉じてください）"
     if snapshot["status"] == fetcher.AUTH_EXPIRED:
         return "ログインが必要です"
     if snapshot["count"] is None:
@@ -45,10 +55,11 @@ def status_text(snapshot):
 
 
 class Tray:
-    def __init__(self, state, url, log_path, on_exit):
+    def __init__(self, state, url, log_path, on_login, on_exit):
         self._state = state
         self._url = url
         self._log_path = log_path
+        self._on_login = on_login
         self._on_exit = on_exit
         self.icon = None
 
@@ -60,11 +71,16 @@ class Tray:
         if self.icon:
             self.icon.stop()
 
+    def notify(self, text):
+        if self.icon:
+            self.icon.notify(text, TITLE)
+
     def _run(self):
         # pystray はアイコンを作ったスレッドでメッセージループを回す必要がある
         self.icon = pystray.Icon("YouTubeSubCounter", make_image(), TITLE, pystray.Menu(
             pystray.MenuItem(lambda _: status_text(self._state.snapshot()), None, enabled=False),
             pystray.MenuItem("OBS 用の URL をコピー", self._copy_url, default=True),
+            pystray.MenuItem("ログイン画面を開く", lambda icon, item: self._on_login()),
             pystray.MenuItem("ログを開く", self._open_log),
             pystray.MenuItem("終了", self._exit),
         ))

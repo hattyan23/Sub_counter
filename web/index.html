@@ -4,18 +4,48 @@
 <meta charset="utf-8">
 <title>登録者数</title>
 <style>
-  body { margin: 0; font: 700 96px sans-serif; color: #fff; background: #222; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; align-items: center; justify-content: center; text-align: center;
+         font-family: sans-serif; font-weight: 700; color: #fff; overflow: hidden;
+         text-shadow: 0 0 .08em #000, 0 0 .08em #000, 0 0 .2em #000; }
+  /* OBS 側の幅・高さがいくつでも収まるように、枠の大きさに合わせて文字を拡大縮小する */
+  #count { font-size: min(25vw, 90vh); line-height: 1; }
+  #notice { font-size: min(5vw, 12vh); line-height: 1.5; padding: 0 4vw; }
+  #notice small { display: block; font-size: .65em; }
 </style>
 </head>
 <body>
 <div id="count"></div>
+<div id="notice"></div>
 <script>
-  const el = document.getElementById("count");
-  // 取得に失敗してもサーバーは前回の値を送るので、画面にエラーは出さない。
+  const countEl = document.getElementById("count");
+  const noticeEl = document.getElementById("notice");
+  // 数字がまだないときだけ案内を出す。一度表示できたら、取得に失敗しても
+  // サーバーは前回の値を送るので、配信画面にエラーは出さない。
   // 接続が切れた場合は EventSource が自動で再接続する。
+  const NOTICES = {
+    login_waiting: ["Chrome で Google にログインしてください", "終わったら Chrome を閉じると、ここに登録者数が出ます"],
+    auth_expired: ["ログインが必要です", "画面右下の赤いアイコンを右クリックして「ログイン画面を開く」を選んでください"],
+    error: ["登録者数を取得できません", "自動でやり直しています。しばらくお待ちください"],
+    no_value: ["登録者数を取得できません", "自動でやり直しています。しばらくお待ちください"],
+  };
+  const DEFAULT_NOTICE = ["登録者数を取得しています", "20 秒ほどお待ちください"];
+
+  function showNotice([title, detail]) {
+    noticeEl.textContent = title;
+    const small = document.createElement("small");
+    small.textContent = detail;
+    noticeEl.append(small);
+  }
+
   new EventSource("/events").onmessage = (e) => {
-    const { count } = JSON.parse(e.data);
-    if (count !== null) el.textContent = count;
+    const { count, status } = JSON.parse(e.data);
+    if (count !== null) {
+      countEl.textContent = count;
+      noticeEl.replaceChildren();
+    } else {
+      showNotice(NOTICES[status] || DEFAULT_NOTICE);
+    }
   };
 </script>
 </body>

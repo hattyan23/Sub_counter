@@ -59,6 +59,8 @@ OK = "ok"
 AUTH_EXPIRED = "auth_expired"   # 再ログインが必要
 NO_VALUE = "no_value"           # ページは開けたが値が見つからない
 ERROR = "error"                 # 読み込み失敗やブラウザの異常
+STARTING = "starting"           # 取得の完了待ち
+LOGIN_WAITING = "login_waiting" # ログイン用 Chrome が閉じられるのを待っている
 
 log = logging.getLogger(__name__)
 
@@ -103,13 +105,21 @@ def find_chrome():
     return next((p for p in CHROME_CANDIDATES if p.exists()), None)
 
 
+def _login_command():
+    return [find_chrome(), f"--user-data-dir={PROFILE}", "--no-first-run", "--no-default-browser-check", STUDIO]
+
+
+def focus_login():
+    """すでに開いているログイン用 Chrome を前面に出す（同じプロファイルで起動すると既存の窓が反応する）"""
+    subprocess.Popen(_login_command())
+
+
 def login(cancel):
     """素の Chrome を開き、閉じられるまで待つ。
     Playwright を介さないのは、自動化ブラウザからの Google ログインが拒否されやすいため"""
     PROFILE.mkdir(parents=True, exist_ok=True)
     log.warning("ログイン用の Chrome を開きます")
-    proc = subprocess.Popen([find_chrome(), f"--user-data-dir={PROFILE}", "--no-first-run",
-                             "--no-default-browser-check", STUDIO])
+    proc = subprocess.Popen(_login_command())
     while proc.poll() is None:
         if cancel.wait(1):
             proc.terminate()

@@ -71,12 +71,30 @@ class CounterState:
         return {"count": self._count, "status": self._status, "updated_at": self._updated_at}
 
 
-def fetch_loop(source, state, stop, interval, login=None):
+def wait_next(stop, login_request, interval):
+    """次の取得まで待つ。ログインを頼まれたらすぐ戻る"""
+    deadline = time.monotonic() + interval
+    while not stop.is_set() and not login_request.is_set():
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return
+        stop.wait(min(left, 1))
+
+
+def fetch_loop(source, state, stop, interval, login=None, login_request=None, on_session_lost=None):
     """取得を繰り返す。どんな例外が起きてもループは止めない"""
     interval = max(interval, MIN_INTERVAL_SEC)
+    login_request = login_request or threading.Event()
     login_offered = False   # ログインせずに閉じられたとき、Chrome を開き続けないようにする
     try:
         while not stop.is_set():
+            if login and login_request.is_set():
+                login_request.clear()
+                source.close()   # 同じプロファイルは同時に開けない
+                state.apply(fetcher.FetchResult(fetcher.LOGIN_WAITING))
+                login(stop)
+                state.apply(fetcher.FetchResult(fetcher.STARTING))
+                continue
             try:
                 result = source.fetch()
             except Exception as e:
@@ -88,15 +106,17 @@ def fetch_loop(source, state, stop, interval, login=None):
                 log.info("取得: %d (%s)", result.count, result.source)
             elif result.status == fetcher.AUTH_EXPIRED:
                 log.warning("ログインが必要です: %s", result.detail)
-                if login and not login_offered:
+                if not login_offered:
                     login_offered = True
-                    source.close()   # 同じプロファイルは同時に開けない
-                    login(stop)
-                    continue
-                log.warning("ログインできるまで再試行します。Chrome を開き直すにはアプリを再起動してください")
+                    if state.snapshot()["count"] is None:
+                        login_request.set()
+                        continue
+                    # 配信中かもしれないので、窓は開かず通知だけにする（数字は表示し続ける）
+                    if on_session_lost:
+                        on_session_lost()
             else:
                 log.warning("取得失敗 (%s): %s", result.status, result.detail)
-            stop.wait(interval)
+            wait_next(stop, login_request, interval)
     finally:
         source.close()
 
@@ -159,13 +179,36 @@ def raise_interrupt(*_):
     raise KeyboardInterrupt
 
 
-def request_login(cancel):
-    if not fetcher.find_chrome():
-        tray.message_box("Google Chrome が見つかりません。\nインストールしてから、もう一度起動してください。", wait=False)
-        return
-    tray.message_box("Chrome を開きます。\n\n1. Google にログインしてください\n"
-                     "2. YouTube Studio が表示されたら、Chrome を閉じてください", wait=False)
-    fetcher.login(cancel)
+class LoginFlow:
+    def __init__(self):
+        self.requested = threading.Event()
+        self._running = threading.Event()
+        self._chrome_open = threading.Event()
+
+    def run(self, cancel):
+        """案内を出してから Chrome を開く。OK を押した直後なら Chrome が裏に隠れない"""
+        self._running.set()
+        try:
+            if not fetcher.find_chrome():
+                tray.message_box_until("Google Chrome が見つかりません。\nインストールしてから、もう一度起動してください。", cancel)
+                return
+            tray.message_box_until("YouTube Studio にログインします。\n\n「OK」を押すと Chrome が開きます。\n"
+                                   "1. Google にログインしてください\n"
+                                   "2. YouTube Studio が表示されたら、Chrome を閉じてください", cancel)
+            if cancel.is_set():
+                return
+            self._chrome_open.set()
+            fetcher.login(cancel)
+        finally:
+            self._chrome_open.clear()
+            self._running.clear()
+
+    def open(self):
+        """トレイのメニューから呼ばれる"""
+        if self._chrome_open.is_set():
+            fetcher.focus_login()
+        elif not self._running.is_set():
+            self.requested.set()
 
 
 def setup_logging():
@@ -199,13 +242,17 @@ def main():
 
     stop = threading.Event()
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    flow = LoginFlow()
+    icon = tray.Tray(state, f"http://localhost:{args.port}/", LOG_PATH, on_login=flow.open, on_exit=stop.set)
+    icon.start()
     worker = threading.Thread(
-        target=fetch_loop, args=(fetcher.Fetcher(cancel=stop), state, stop, args.interval, request_login),
+        target=fetch_loop, args=(fetcher.Fetcher(cancel=stop), state, stop, args.interval, flow.run, flow.requested),
+        kwargs={"on_session_lost": lambda: icon.notify(
+            "ログインが切れました。数字は直前の値のまま止まります。\n"
+            "配信の合間に、アイコンの右クリックから「ログイン画面を開く」を選んでください")},
         daemon=True,
     )
     worker.start()
-    icon = tray.Tray(state, f"http://localhost:{args.port}/", LOG_PATH, on_exit=stop.set)
-    icon.start()
     log.info("http://localhost:%d/ で待ち受けます", args.port)
     try:
         while not stop.wait(0.5):   # 短く区切らないと Ctrl+C を受け取れない
