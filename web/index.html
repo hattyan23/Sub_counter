@@ -5,48 +5,394 @@
 <title>登録者数</title>
 <style>
   html, body { height: 100%; margin: 0; }
-  body { display: flex; align-items: center; justify-content: center; text-align: center;
-         font-family: sans-serif; font-weight: 700; color: #fff; overflow: hidden;
-         text-shadow: 0 0 .08em #000, 0 0 .08em #000, 0 0 .2em #000; }
-  /* OBS 側の幅・高さがいくつでも収まるように、枠の大きさに合わせて文字を拡大縮小する */
-  #count { font-size: min(25vw, 90vh); line-height: 1; }
-  #notice { font-size: min(5vw, 12vh); line-height: 1.5; padding: 0 4vw; }
-  #notice small { display: block; font-size: .65em; }
+  body { overflow: hidden; color: #fff; font-family: sans-serif; font-weight: 700; }
+  #bg, #fx { position: fixed; inset: 0; pointer-events: none; }
+  #bg img, #bg video, #fx img, #fx video { width: 100%; height: 100%; display: block; }
+  #fx canvas { width: 100%; height: 100%; }
+  #stage { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center;
+           white-space: nowrap; font-size: min(25vw, 70vh); visibility: hidden; }
+  #count, #source { text-shadow: var(--shadow); }
+  /* 桁ごとに動かすので、数字の幅をそろえる */
+  #count { display: inline-flex; line-height: 1.15; font-variant-numeric: tabular-nums; }
   #count.placeholder { opacity: .5; }
+  #count > span { display: inline-block; white-space: pre; }
+  /* 桁が回る枠。縦だけ切り取り、横は縁取りがはみ出しても見えるようにする */
+  .col { height: 1.15em; clip-path: inset(0 -1em); }
+  .col > span { display: flex; flex-direction: column; }
+  .stack { position: relative; }
+  .stack > .old { position: absolute; left: 50%; top: 0; }
+  /* YouTube の規約により、データの出どころが YouTube だと分かるようにする */
+  #source { display: block; font-size: .16em; line-height: 1.4; }
+  #notice { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; text-align: center;
+            font: 700 min(5vw, 12vh)/1.5 sans-serif; padding: 0 4vw; color: #fff;
+            text-shadow: 0 0 .08em #000, 0 0 .08em #000, 0 0 .2em #000; }
+  #notice:empty { display: none; }
+  #notice small { display: block; font-size: .65em; }
+  .sparkle { position: fixed; transform: translate(-50%, -50%); }
 </style>
 </head>
 <body>
-<div id="count"></div>
+<div id="bg"></div>
+<div id="stage"><div id="count"></div><div id="source"></div></div>
+<div id="fx"></div>
 <div id="notice"></div>
 <script>
-  const countEl = document.getElementById("count");
-  const noticeEl = document.getElementById("notice");
+  const $ = (id) => document.getElementById(id);
+  const countEl = $("count"), sourceEl = $("source"), noticeEl = $("notice"), stageEl = $("stage"), bgEl = $("bg"), fxEl = $("fx");
+  const preview = new URLSearchParams(location.search).has("preview");
+  const assetUrl = (name) => `/assets/${encodeURIComponent(name)}`;
+  const isVideo = (name) => /\.(webm|mp4)$/i.test(name);
+  const EASE = "cubic-bezier(.2, .8, .2, 1)";
+
   // 数字がまだないときだけ、設定の問題なら案内を、それ以外（一時的な問題など）なら「---」を出す。
   // 一度表示できたら、取得に失敗してもサーバーは前回の値を送るので、配信画面にエラーは出さない。
-  // 接続が切れた場合は EventSource が自動で再接続する。
-  const OPEN_SETTINGS = "画面右下の赤いアイコンを右クリックして「設定を開く」を選んでください";
+  const OPEN_SETTINGS = "画面右下のアイコンを右クリックして「設定を開く」を選んでください";
   const NOTICES = {
-    not_configured: ["API キーとチャンネル ID を設定してください", OPEN_SETTINGS],
+    not_configured: ["初期設定をしてください", OPEN_SETTINGS],
     key_invalid: ["API キーを確認してください", OPEN_SETTINGS],
-    channel_not_found: ["チャンネル ID を確認してください", OPEN_SETTINGS],
-    subscribers_hidden: ["登録者数が非公開になっています", "YouTube の設定で登録者数を公開してください"],
+    channel_not_found: ["チャンネルを確認してください", OPEN_SETTINGS],
+    subscribers_hidden: ["登録者数が非公開になっています", "公開に変えたら、アイコンの右クリックから「今すぐ取得し直す」を選んでください"],
   };
 
-  function showNotice([title, detail]) {
-    noticeEl.textContent = title;
-    const small = document.createElement("small");
-    small.textContent = detail;
-    noticeEl.append(small);
+  let design = null;
+  let shown = null;   // 表示中の数字
+  let gen = 0;        // 新しい値が来たら、動いている途中のアニメーションを打ち切る
+
+  function span(text, className) {
+    const el = document.createElement("span");
+    if (className) el.className = className;
+    if (text !== undefined) el.textContent = text;
+    return el;
   }
 
-  new EventSource("/events").onmessage = (e) => {
-    const { count, status } = JSON.parse(e.data);
+  function format(value) {
+    return design.separator ? value.toLocaleString("en-US") : String(value);
+  }
+
+  function setText(text) {
+    countEl.replaceChildren(...[...text].map((c) => span(c)));
+  }
+
+  function settle(my, text) {
+    if (my === gen) setText(text);
+  }
+
+  // 増えたら上へ、減ったら下へ動かす（dir は 1 か -1）
+  const ANIMATIONS = {
+    slide(a, b, dir, my, d) {
+      const stack = span(undefined, "stack");
+      const now = span(b), old = span(a, "old");
+      stack.append(now, old);
+      countEl.replaceChildren(stack);
+      old.animate([{ transform: "translate(-50%, 0)", opacity: 1 }, { transform: `translate(-50%, ${-dir * .8}em)`, opacity: 0 }],
+                  { duration: d, easing: EASE, fill: "forwards" });
+      now.animate([{ transform: `translateY(${dir * .8}em)`, opacity: 0 }, { transform: "none", opacity: 1 }],
+                  { duration: d, easing: EASE }).onfinish = () => settle(my, b);
+    },
+
+    odometer(a, b, dir, my, d) {
+      const n = Math.max(a.length, b.length);
+      const pa = a.padStart(n), pb = b.padStart(n);
+      const cells = [];
+      for (let i = 0; i < n; i++) {
+        if (pa[i] === pb[i]) {
+          if (pb[i] !== " ") cells.push(span(pb[i]));
+          continue;
+        }
+        // 数字どうしなら途中の数字も通って回す
+        const steps = [pa[i]];
+        if (/\d/.test(pa[i]) && /\d/.test(pb[i])) {
+          for (let x = +pa[i]; String(x) !== pb[i];) {
+            x = (x + dir + 10) % 10;
+            steps.push(String(x));
+          }
+        } else {
+          steps.push(pb[i]);
+        }
+        if (dir < 0) steps.reverse();
+        const col = span(undefined, "col"), strip = span();
+        strip.append(...steps.map((c) => span(c === " " ? " " : c)));
+        col.append(strip);
+        cells.push(col);
+        const travel = `${-(steps.length - 1) * 1.15}em`;
+        const frames = dir > 0 ? [{ transform: "none" }, { transform: `translateY(${travel})` }]
+                               : [{ transform: `translateY(${travel})` }, { transform: "none" }];
+        strip.animate(frames, { duration: d, easing: EASE, fill: "forwards", delay: (n - 1 - i) * d * .06 });
+      }
+      countEl.replaceChildren(...cells);
+      setTimeout(() => settle(my, b), d + n * d * .06);
+    },
+
+    flip(a, b, dir, my, d) {
+      const n = Math.max(a.length, b.length);
+      const pa = a.padStart(n), pb = b.padStart(n);
+      const cells = [];
+      for (let i = 0; i < n; i++) {
+        const cell = span(pa[i]);
+        cells.push(cell);
+        if (pa[i] === pb[i]) continue;
+        const half = { duration: d / 2, delay: (n - 1 - i) * d * .08 };
+        const out = cell.animate([{ transform: "perspective(3em) rotateX(0)" }, { transform: `perspective(3em) rotateX(${dir * 90}deg)` }],
+                                 { ...half, easing: "ease-in", fill: "forwards" });
+        out.onfinish = () => {
+          if (my !== gen) return;
+          cell.textContent = pb[i];
+          cell.animate([{ transform: `perspective(3em) rotateX(${-dir * 90}deg)` }, { transform: "perspective(3em) rotateX(0)" }],
+                       { duration: d / 2, easing: "ease-out" });
+        };
+      }
+      countEl.replaceChildren(...cells);
+      setTimeout(() => settle(my, b), d + n * d * .08);
+    },
+
+    countup(a, b, dir, my, d, from, to) {
+      const start = performance.now();
+      const step = (now) => {
+        if (my !== gen) return;
+        const p = Math.min(1, (now - start) / d);
+        setText(format(Math.round(from + (to - from) * (1 - (1 - p) ** 3))));
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    },
+
+    pop(a, b, dir, my, d) {
+      setText(b);
+      countEl.animate([{ transform: "none" }, { transform: `translateY(${-dir * .08}em) scale(${dir > 0 ? 1.25 : .85})`, offset: .35 },
+                       { transform: "none" }], { duration: d, easing: "ease-out" });
+    },
+
+    bounce(a, b, dir, my, d) {
+      setText(b);
+      countEl.animate([0, -.35, .08, -.04, 0].map((y) => ({ transform: `translateY(${dir * y}em)` })),
+                      { duration: d, easing: "ease-out" });
+    },
+  };
+
+  // 増えたときだけの演出
+  const EFFECTS = {
+    glow(d) {
+      countEl.animate([{ filter: "none" }, { filter: `drop-shadow(0 0 .12em ${design.color}) brightness(1.4)`, offset: .3 },
+                       { filter: "none" }], { duration: Math.max(d, 1200) });
+    },
+
+    sparkle(d) {
+      const box = countEl.getBoundingClientRect();
+      for (let i = 0; i < 14; i++) {
+        const star = span("✦", "sparkle");
+        star.style.left = `${box.left + Math.random() * box.width}px`;
+        star.style.top = `${box.top + Math.random() * box.height}px`;
+        star.style.fontSize = `${box.height * (.12 + Math.random() * .18)}px`;
+        star.style.color = design.color;
+        fxEl.append(star);
+        star.animate([{ transform: "translate(-50%, -50%) scale(0) rotate(0)", opacity: 1 },
+                      { transform: "translate(-50%, -50%) scale(1) rotate(90deg)", opacity: 1, offset: .5 },
+                      { transform: `translate(-50%, ${-50 - 80 * Math.random()}%) scale(0) rotate(180deg)`, opacity: 0 }],
+                     { duration: Math.max(d, 900) * (1 + Math.random()), delay: Math.random() * 300, easing: "ease-out" })
+          .onfinish = () => star.remove();
+      }
+    },
+
+    confetti() {
+      const canvas = document.createElement("canvas");
+      canvas.width = innerWidth;
+      canvas.height = innerHeight;
+      fxEl.append(canvas);
+      const ctx = canvas.getContext("2d");
+      const box = countEl.getBoundingClientRect();
+      const size = Math.max(4, Math.min(innerWidth, innerHeight) / 60);
+      const colors = ["#ff5a5f", "#ffb400", "#00c2a8", "#3a86ff", "#c77dff", "#ffffff"];
+      const parts = Array.from({ length: 140 }, () => ({
+        x: box.left + box.width / 2, y: box.top + box.height / 2,
+        vx: (Math.random() - .5) * innerWidth * .025, vy: -(.4 + Math.random()) * innerHeight * .03,
+        r: Math.random() * Math.PI, vr: (Math.random() - .5) * .4, color: colors[Math.floor(Math.random() * colors.length)],
+      }));
+      const start = performance.now();
+      const step = (now) => {
+        const t = (now - start) / 2600;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (t >= 1) return canvas.remove();
+        ctx.globalAlpha = Math.min(1, (1 - t) * 3);
+        for (const p of parts) {
+          p.vy += innerHeight * .0012;
+          p.vx *= .99;
+          p.x += p.vx;
+          p.y += p.vy;
+          p.r += p.vr;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.r);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-size / 2, -size / 4, size, size / 2);
+          ctx.restore();
+        }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    },
+
+    // 利用者が追加した画像や動画を一度だけ重ねる
+    asset() {
+      const name = design.effect_asset;
+      if (!name) return;
+      fxEl.querySelector(".overlay")?.remove();
+      const el = document.createElement(isVideo(name) ? "video" : "img");
+      el.className = "overlay";
+      el.style.objectFit = "contain";
+      el.src = assetUrl(name);
+      fxEl.append(el);
+      const fade = () => el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400 }).onfinish = () => el.remove();
+      if (el instanceof HTMLVideoElement) {
+        el.muted = true;
+        el.onended = fade;
+        el.onerror = () => el.remove();
+        el.play().catch(() => el.remove());
+        setTimeout(() => el.isConnected && fade(), 15000);
+      } else {
+        el.onerror = () => el.remove();
+        setTimeout(fade, 3000);
+      }
+    },
+  };
+
+  function show(value, animate) {
+    const my = ++gen;
+    countEl.getAnimations({ subtree: true }).forEach((a) => a.cancel());
+    const from = shown;
+    shown = value;
+    if (!animate || from === null || from === value) {
+      setText(format(value));
+      return;
+    }
+    const dir = value > from ? 1 : -1;
+    const d = design.duration_ms;
+    (ANIMATIONS[design.animation] || ((a, b) => setText(b)))(format(from), format(value), dir, my, d, from, value);
+    if (dir > 0) EFFECTS[design.effect]?.(d);
+  }
+
+  function update({ count, status }) {
     const notice = count === null ? NOTICES[status] : null;
     noticeEl.replaceChildren();
+    if (notice) {
+      const small = document.createElement("small");
+      small.textContent = notice[1];
+      noticeEl.append(notice[0], small);
+    }
     countEl.classList.toggle("placeholder", count === null);
-    countEl.textContent = count !== null ? count : notice ? "" : "---";
-    if (notice) showNotice(notice);
-  };
+    sourceEl.textContent = count !== null ? "YouTube 登録者数" : "";
+    if (count === null) {
+      gen++;
+      shown = null;
+      setText(notice ? "" : "---");
+    } else {
+      show(count, true);
+    }
+  }
+
+  // 縁取りは、文字の周りに影を何重にも置いて作る
+  function textShadow(d) {
+    const parts = [];
+    const w = d.outline * .01;
+    if (w > 0) {
+      for (let i = 0; i < 16; i++) {
+        const a = i / 16 * 2 * Math.PI;
+        parts.push(`${(Math.cos(a) * w).toFixed(4)}em ${(Math.sin(a) * w).toFixed(4)}em 0 ${d.outline_color}`);
+      }
+    }
+    if (d.shadow) parts.push("0 .06em .12em rgba(0, 0, 0, .6)");
+    return parts.join(", ") || "none";
+  }
+
+  let fontAsset = null, fontFamily = null, fontSeq = 0;
+  async function applyFont(d) {
+    if (d.font_asset !== fontAsset) {
+      fontAsset = d.font_asset;
+      fontFamily = null;
+      if (fontAsset) {
+        const family = `SubCounterFont${++fontSeq}`;
+        try {
+          const face = await new FontFace(family, `url("${assetUrl(fontAsset)}")`).load();
+          document.fonts.add(face);
+          if (fontAsset === d.font_asset) fontFamily = family;
+        } catch {
+          // 読めないフォントは無視して、次の候補を使う
+        }
+      }
+    }
+    if (d !== design) return;
+    const families = [fontFamily, d.font_family].filter(Boolean).map((f) => `"${f}"`);
+    stageEl.style.fontFamily = [...families, "sans-serif"].join(", ");
+  }
+
+  let bgKey = null;
+  function applyBackground(d) {
+    bgEl.style.opacity = d.bg_opacity / 100;
+    const key = JSON.stringify([d.bg_type, d.bg_color, d.bg_asset, d.bg_fit]);
+    if (key === bgKey) return;   // 動画を最初から再生し直さない
+    bgKey = key;
+    bgEl.replaceChildren();
+    bgEl.style.background = "";
+    if (d.bg_type === "color") {
+      bgEl.style.background = d.bg_color;
+    } else if (d.bg_type === "asset" && d.bg_asset) {
+      if (d.bg_fit === "tile" && !isVideo(d.bg_asset)) {
+        bgEl.style.background = `url("${assetUrl(d.bg_asset)}") repeat`;
+        return;
+      }
+      const el = document.createElement(isVideo(d.bg_asset) ? "video" : "img");
+      el.style.objectFit = d.bg_fit === "tile" ? "cover" : d.bg_fit;
+      if (el instanceof HTMLVideoElement) Object.assign(el, { muted: true, loop: true, autoplay: true, playsInline: true });
+      el.src = assetUrl(d.bg_asset);
+      bgEl.append(el);
+    }
+  }
+
+  function applyDesign(d) {
+    design = d;
+    Object.assign(stageEl.style, {
+      left: `${d.pos_x}%`, top: `${d.pos_y}%`, color: d.color, fontWeight: d.font_weight,
+      fontSize: `calc(min(25vw, 70vh) * ${d.size / 100})`, visibility: "visible",
+    });
+    stageEl.style.setProperty("--shadow", textShadow(d));
+    applyFont(d);
+    applyBackground(d);
+    if (shown !== null) show(shown, false);
+  }
+
+  // 見た目を読めなかったときの最低限の表示
+  const FALLBACK = { font_family: "", font_asset: "", font_weight: 700, size: 100, color: "#ffffff", outline_color: "#000000",
+                     outline: 3, shadow: true, separator: false, pos_x: 50, pos_y: 50, animation: "none", duration_ms: 800,
+                     effect: "none", effect_asset: "", bg_type: "none", bg_color: "#000000", bg_asset: "", bg_fit: "cover",
+                     bg_opacity: 100 };
+
+  async function loadDesign() {
+    try {
+      applyDesign(await (await fetch("/api/design")).json());
+    } catch {
+      if (!design) applyDesign(FALLBACK);
+    }
+  }
+
+  if (preview) {
+    // 見た目の設定の画面から、保存前の見た目と試しの数字を受け取る
+    addEventListener("message", (e) => {
+      if (e.origin !== location.origin) return;
+      if (e.data.type === "design") applyDesign(e.data.design);
+      if (e.data.type === "count" && design) update({ count: e.data.count, status: "ok" });
+    });
+    parent.postMessage({ type: "ready" }, location.origin);
+  } else {
+    let designRev = null;
+    loadDesign().then(() => {
+      // 接続が切れた場合は EventSource が自動で再接続する
+      new EventSource("/events").onmessage = async (e) => {
+        const snapshot = JSON.parse(e.data);
+        if (designRev !== null && snapshot.design_rev !== designRev) await loadDesign();
+        designRev = snapshot.design_rev;
+        update(snapshot);
+      };
+    });
+  }
 </script>
 </body>
 </html>

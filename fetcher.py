@@ -9,7 +9,8 @@ YouTube Data API v3 から登録者数を取得するモジュール
 import dataclasses
 import datetime
 import json
-import logging
+import re
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -31,13 +32,14 @@ NOT_CONFIGURED = "not_configured"       # 設定ファイルの問題
 KEY_INVALID = "key_invalid"             # API キーの問題
 CHANNEL_NOT_FOUND = "channel_not_found"
 SUBSCRIBERS_HIDDEN = "subscribers_hidden"
-# 設定を直さない限り解決しないので再試行しない
+# 利用者が直すまで解決しないので再試行しない
 CONFIG_PROBLEMS = {NOT_CONFIGURED, KEY_INVALID, CHANNEL_NOT_FOUND, SUBSCRIBERS_HIDDEN}
 
 DAILY_QUOTA_REASONS = {"quotaExceeded", "dailyLimitExceeded"}
 RATE_LIMIT_REASONS = {"rateLimitExceeded", "userRateLimitExceeded"}
-
-log = logging.getLogger(__name__)
+API_DISABLED_REASONS = {"accessNotConfigured", "SERVICE_DISABLED"}
+KEY_REASONS = {"keyInvalid", "keyExpired", "forbidden", "ipRefererBlocked", "API_KEY_INVALID", "API_KEY_EXPIRED",
+               "API_KEY_SERVICE_BLOCKED", "API_KEY_HTTP_REFERRER_BLOCKED", "API_KEY_IP_ADDRESS_BLOCKED"}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -78,19 +80,16 @@ def parse_response(data):
 
 
 def error_reason(body):
-    """エラーレスポンスから原因のコードだけを取り出す"""
+    """エラーレスポンスから原因のコードだけを取り出す。ログに出すので英数字以外は落とす"""
     try:
         error = json.loads(body)["error"]
         reason = error["errors"][0]["reason"]
-        if reason != "badRequest":
-            return reason
-        # キーが無効なときは reason が badRequest になり、詳しい原因は details に入ることがある
-        for detail in error.get("details", []):
-            if detail.get("reason"):
-                return detail["reason"]
-        return reason
+        if reason == "badRequest":
+            # キーが無効なときは reason が badRequest になり、詳しい原因は details に入る
+            reason = next((d["reason"] for d in error.get("details", []) if d.get("reason")), reason)
     except (ValueError, KeyError, IndexError, TypeError, AttributeError):
         return ""
+    return re.sub(r"\W", "", str(reason), flags=re.ASCII)[:64]
 
 
 def classify_http_error(code, reason):
@@ -107,49 +106,83 @@ def classify_http_error(code, reason):
                            detail="API の呼び出しが制限されました（30 分後に再開）")
     if reason == "channelNotFound":
         return FetchResult(CHANNEL_NOT_FOUND, detail="チャンネルが見つかりません。チャンネル ID を確認してください")
-    if reason == "accessNotConfigured":
-        return FetchResult(KEY_INVALID, detail="YouTube Data API v3 が有効になっていません。Google Cloud の設定を確認してください")
-    return FetchResult(KEY_INVALID, detail=f"API キーを確認してください（{reason or f'HTTP {code}'}）")
+    if reason in API_DISABLED_REASONS:
+        return FetchResult(KEY_INVALID, detail="YouTube Data API v3 が有効になっていません。"
+                                               "有効にしたら「今すぐ取得し直す」を選んでください")
+    if reason in KEY_REASONS:
+        return FetchResult(KEY_INVALID, detail=f"API キーを確認してください（{reason}）")
+    # プロキシや一時的な応答の可能性があるので、設定の問題とは決めつけず再試行する
+    return FetchResult(ERROR, detail=f"API のエラー（HTTP {code} {reason}）".replace(" ）", "）"))
+
+
+def _call_api(params):
+    """API を呼び、(成功した応答, None) か (None, 失敗の FetchResult) を返す"""
+    url = f"{API_URL}?{urllib.parse.urlencode(params)}"
+    try:
+        with urllib.request.urlopen(url, timeout=TIMEOUT_SEC) as res:
+            return json.load(res), None
+    except urllib.error.HTTPError as e:
+        with e:
+            try:
+                body = e.read()
+            except OSError:
+                body = b""
+        return None, classify_http_error(e.code, error_reason(body))
+    except (urllib.error.URLError, OSError):
+        return None, FetchResult(ERROR, detail="通信エラー")
+    except ValueError:
+        return None, FetchResult(ERROR, detail="API の応答を読めませんでした")
+
+
+def resolve_handle(api_key, handle):
+    """@ハンドルからチャンネル ID を調べ、(チャンネル ID, None) か (None, 失敗の FetchResult) を返す"""
+    try:
+        data, failure = _call_api({"part": "id", "forHandle": handle, "key": api_key, "fields": "items(id)"})
+        if failure:
+            return None, failure
+        items = data.get("items") if isinstance(data, dict) else None
+        if not items or not isinstance(items[0].get("id"), str):
+            return None, FetchResult(CHANNEL_NOT_FOUND, detail="このハンドルのチャンネルが見つかりません")
+        return items[0]["id"], None
+    except Exception as e:
+        return None, FetchResult(ERROR, detail=type(e).__name__)
 
 
 class Fetcher:
     def __init__(self):
         self.interval = config.DEFAULT_INTERVAL_SEC
+        self.channel_id = None
         self._seen_config = None
+        self._retry = threading.Event()
 
     def fetch(self):
         """1 回取得する。例外は投げない"""
+        self._retry.clear()
         self._seen_config = config.signature()
         try:
             cfg = config.load()
         except config.ConfigError as e:
             return FetchResult(NOT_CONFIGURED, detail=str(e))
         self.interval = cfg.interval_sec
+        self.channel_id = cfg.channel_id
         try:
-            return self._request(cfg)
-        except urllib.error.HTTPError as e:
-            with e:
-                return classify_http_error(e.code, error_reason(e.read()))
-        except (urllib.error.URLError, OSError):
-            return FetchResult(ERROR, detail="通信エラー")
-        except ValueError:
-            return FetchResult(ERROR, detail="API の応答を読めませんでした")
+            data, failure = _call_api({
+                "part": "statistics",
+                "id": cfg.channel_id,
+                "key": cfg.api_key,
+                "fields": "items(statistics)",
+            })
+            return failure or parse_response(data)
         except Exception as e:
             return FetchResult(ERROR, detail=type(e).__name__)
 
-    def config_changed(self):
-        return config.signature() != self._seen_config
+    def request_retry(self):
+        """トレイの「今すぐ取得し直す」から呼ばれる"""
+        self._retry.set()
+
+    def should_wake(self):
+        """待ち時間を切り上げて取得し直すべきか（設定が変わった、または利用者が頼んだ）"""
+        return self._retry.is_set() or config.signature() != self._seen_config
 
     def close(self):
         pass
-
-    @staticmethod
-    def _request(cfg):
-        query = urllib.parse.urlencode({
-            "part": "statistics",
-            "id": cfg.channel_id,
-            "key": cfg.api_key,
-            "fields": "items(statistics)",
-        })
-        with urllib.request.urlopen(f"{API_URL}?{query}", timeout=TIMEOUT_SEC) as res:
-            return parse_response(json.load(res))

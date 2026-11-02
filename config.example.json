@@ -1,5 +1,6 @@
 {
   "api_key": "",
   "channel_id": "",
-  "interval_sec": 60
+  "interval_sec": 60,
+  "terms_accepted": false
 }

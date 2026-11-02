@@ -1,7 +1,17 @@
 # API キーが入っているので絶対にコミットしない
 config.json
+config.tmp
+
+# 開発時に作られる見た目の設定と素材
+design.json
+design.tmp
+assets/
+
+# 旧スクレイピング版のログイン情報が残っている環境のため
+chrome_profile/
 
 *.log
+*.log.*
 
 build/
 dist/

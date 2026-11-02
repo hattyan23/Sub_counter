@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>見た目の設定 - 登録者数カウンター</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f5f6f8; --card: #fff; --text: #1a1c20; --sub: #5a606b; --line: #d8dbe0;
+          --accent: #2563eb; --ok: #15803d; --bad: #b91c1c; --check-a: #e4e6ea; --check-b: #f8f9fa; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #16181c; --card: #22252b; --text: #eceef1; --sub: #a4aab4; --line: #3a3e46;
+            --accent: #6d9cff; --ok: #4ade80; --bad: #f87171; --check-a: #2b2e34; --check-b: #383c44; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 system-ui, "Yu Gothic UI", sans-serif; }
+  main { max-width: 1160px; margin: 0 auto; padding: 20px 16px 48px; display: grid; gap: 20px;
+         grid-template-columns: minmax(0, 1fr) 420px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  p { margin: 0 0 8px; }
+  .sub { color: var(--sub); font-size: 13px; }
+  a { color: var(--accent); }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+
+  .preview { position: sticky; top: 16px; }
+  /* 透明な部分が分かるように市松模様にする */
+  .screen { aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; border: 1px solid var(--line);
+            background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 24px 24px; }
+  .screen iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .try { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+  .field { display: grid; grid-template-columns: 9em minmax(0, 1fr); gap: 4px 12px; align-items: center; margin-bottom: 12px; }
+  .field > label:first-child { font-weight: 600; }
+  .field .note { grid-column: 2; }
+  .row { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .row > :first-child { flex: 1; min-width: 0; }
+  .row.checks { flex-wrap: wrap; gap: 4px 20px; }
+  .row.checks > :first-child { flex: none; }
+  @media (max-width: 600px) {
+    .field { grid-template-columns: minmax(0, 1fr); }
+    .field .note { grid-column: 1; }
+  }
+  input[type=text], select { width: 100%; box-sizing: border-box; padding: 7px 8px; font: inherit; border: 1px solid var(--line);
+                             border-radius: 6px; background: var(--card); color: inherit; }
+  input[type=range] { width: 100%; }
+  input[type=color] { width: 48px; height: 32px; padding: 0 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
+  output { min-width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; color: var(--sub); }
+  .check { display: flex; gap: 8px; align-items: center; }
+  [hidden] { display: none !important; }
+
+  button { padding: 7px 14px; font: inherit; font-weight: 600; border: 1px solid var(--line); border-radius: 6px;
+           background: var(--card); color: inherit; cursor: pointer; white-space: nowrap; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; padding: 10px 24px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #result { font-weight: 600; min-height: 1.6em; margin-top: 8px; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+
+  #assets { list-style: none; margin: 8px 0 0; padding: 0; }
+  #assets li { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+  #assets li span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <div class="preview">
+    <h1>見た目の設定</h1>
+    <p class="sub">変更はすぐ下のプレビューに出ます。「保存して OBS に反映」を押すまで、配信の画面は変わりません。</p>
+    <div class="screen"><iframe id="screen" src="/?preview" title="プレビュー"></iframe></div>
+    <div class="try">
+      <button type="button" data-step="1">＋1 増やす</button>
+      <button type="button" data-step="-1">−1 減らす</button>
+      <button type="button" data-step="100">＋100 増やす</button>
+    </div>
+    <p class="sub" style="margin-top:8px">市松模様の部分は透明です。OBS では後ろの映像が見えます。</p>
+    <div class="actions" style="margin-top:16px">
+      <button type="button" class="primary" id="save">保存して OBS に反映</button>
+      <button type="button" id="revert">保存した状態に戻す</button>
+      <button type="button" id="defaults">初期の見た目にする</button>
+    </div>
+    <div id="result" role="status"></div>
+  </div>
+
+  <form id="form" autocomplete="off">
+    <section>
+      <h2>文字</h2>
+      <div class="field">
+        <label for="font_family">フォント</label>
+        <div class="row">
+          <input type="text" id="font_family" list="font-list" placeholder="指定なし（標準のフォント）" spellcheck="false">
+          <button type="button" id="load-fonts" hidden>一覧を読み込む</button>
+        </div>
+        <p class="sub note">パソコンに入っているフォントの名前を入力するか、候補から選びます。</p>
+        <datalist id="font-list"></datalist>
+      </div>
+      <div class="field">
+        <label for="font_asset">フォントのファイル</label>
+        <div class="row"><select id="font_asset" data-kinds="font"></select>
+          <button type="button" data-upload="font_asset" data-accept=".ttf,.otf,.woff,.woff2">追加…</button></div>
+        <p class="sub note">ダウンロードしたフォント（ttf・otf・woff・woff2）を使うときはこちら。上の指定より優先します。</p>
+      </div>
+      <div class="field">
+        <label for="font_weight">太さ</label>
+        <select id="font_weight"><option value="400">標準</option><option value="700">太字</option><option value="900">極太</option></select>
+      </div>
+      <div class="field">
+        <label for="size">大きさ</label>
+        <div class="row"><input type="range" id="size" min="30" max="300" step="5"><output data-for="size" data-unit="%"></output></div>
+      </div>
+      <div class="field">
+        <label for="color">文字の色</label>
+        <div class="row"><input type="color" id="color"></div>
+      </div>
+      <div class="field">
+        <label for="outline">縁取り</label>
+        <div class="row"><input type="range" id="outline" min="0" max="10"><output data-for="outline"></output><input type="color" id="outline_color" aria-label="縁取りの色"></div>
+      </div>
+      <div class="field">
+        <span></span>
+        <div class="row checks">
+          <label class="check"><input type="checkbox" id="shadow">影をつける</label>
+          <label class="check"><input type="checkbox" id="separator">3 桁ごとにカンマ</label>
+        </div>
+      </div>
+      <div class="field">
+        <label for="pos_x">横の位置</label>
+        <div class="row"><input type="range" id="pos_x" min="0" max="100"><output data-for="pos_x" data-unit="%"></output></div>
+      </div>
+      <div class="field">
+        <label for="pos_y">縦の位置</label>
+        <div class="row"><input type="range" id="pos_y" min="0" max="100"><output data-for="pos_y" data-unit="%"></output></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>数字が変わるときのアニメーション</h2>
+      <div class="field">
+        <label for="animation">動き</label>
+        <select id="animation">
+          <option value="none">なし</option>
+          <option value="slide">スライド</option>
+          <option value="odometer">回転（メーター風）</option>
+          <option value="flip">めくり</option>
+          <option value="countup">カウントアップ</option>
+          <option value="pop">ポップ</option>
+          <option value="bounce">バウンド</option>
+        </select>
+        <p class="sub note">増えたときは上へ、減ったときは下へ動きます。</p>
+      </div>
+      <div class="field">
+        <label for="duration_ms">速さ</label>
+        <div class="row"><input type="range" id="duration_ms" min="200" max="5000" step="100"><output data-for="duration_ms" data-unit="秒" data-scale="0.001"></output></div>
+      </div>
+      <div class="field">
+        <label for="effect">増えたときの演出</label>
+        <select id="effect">
+          <option value="none">なし</option>
+          <option value="glow">光る</option>
+          <option value="sparkle">きらきら</option>
+          <option value="confetti">紙吹雪</option>
+          <option value="asset">自分の画像・動画</option>
+        </select>
+      </div>
+      <div class="field" data-show="effect=asset">
+        <label for="effect_asset">演出の素材</label>
+        <div class="row"><select id="effect_asset" data-kinds="image video"></select>
+          <button type="button" data-upload="effect_asset" data-accept="image/png,image/jpeg,image/gif,image/webp,image/apng,image/avif,.apng,.webm,.mp4">追加…</button></div>
+        <p class="sub note">画面全体に 1 回だけ重ねます。画像は 3 秒、動画は最後まで（最長 15 秒）表示します。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>背景</h2>
+      <div class="field">
+        <label for="bg_type">背景</label>
+        <select id="bg_type">
+          <option value="none">なし（透明）</option>
+          <option value="color">単色</option>
+          <option value="asset">画像・動画</option>
+        </select>
+      </div>
+      <div class="field" data-show="bg_type=color">
+        <label for="bg_color">色</label>
+        <div class="row"><input type="color" id="bg_color"></div>
+      </div>
+      <div class="field" data-show="bg_type=asset">
+        <label for="bg_asset">素材</label>
+        <div class="row"><select id="bg_asset" data-kinds="image video"></select>
+          <button type="button" data-upload="bg_asset" data-accept="image/png,image/jpeg,image/gif,image/webp,image/apng,image/avif,.apng,.webm,.mp4">追加…</button></div>
+        <p class="sub note">止まった絵は png・jpg、動く絵は gif・webp・apng や動画（webm・mp4）が使えます。動画は音を出さずに繰り返します。OBS では webm が確実です。</p>
+      </div>
+      <div class="field" data-show="bg_type=asset">
+        <label for="bg_fit">合わせ方</label>
+        <select id="bg_fit">
+          <option value="cover">画面を覆う（はみ出しは切る）</option>
+          <option value="contain">全体を収める</option>
+          <option value="fill">引き伸ばす</option>
+          <option value="tile">並べる（画像のみ）</option>
+        </select>
+      </div>
+      <div class="field" data-show="bg_type=color,asset">
+        <label for="bg_opacity">濃さ</label>
+        <div class="row"><input type="range" id="bg_opacity" min="0" max="100" step="5"><output data-for="bg_opacity" data-unit="%"></output></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>追加したファイル</h2>
+      <p class="sub">ファイルはこのパソコンの中にだけ保存します（1 つ 200MB まで）。人が作ったイラスト・フォント・動画は、配信で使ってよいか利用条件を確認してください。</p>
+      <ul id="assets"></ul>
+      <p class="sub" id="no-assets">まだありません。各項目の「追加…」から追加できます。</p>
+    </section>
+  </form>
+</main>
+<input type="file" id="file" hidden>
+<script>
+  const token = new URLSearchParams(location.search).get("token") || "";
+  // 履歴などに残さないよう、読み取ったら URL からトークンを消す
+  history.replaceState(null, "", location.pathname);
+  const $ = (id) => document.getElementById(id);
+  const headers = { "X-Settings-Token": token };
+  const NUMBERS = ["font_weight", "size", "outline", "pos_x", "pos_y", "duration_ms", "bg_opacity"];
+  const KEYS = ["font_family", "font_asset", "font_weight", "size", "color", "outline_color", "outline", "shadow", "separator",
+                "pos_x", "pos_y", "animation", "duration_ms", "effect", "effect_asset", "bg_type", "bg_color", "bg_asset",
+                "bg_fit", "bg_opacity"];
+  const DEFAULTS = { font_family: "", font_asset: "", font_weight: 700, size: 100, color: "#ffffff", outline_color: "#000000",
+                     outline: 3, shadow: true, separator: false, pos_x: 50, pos_y: 50, animation: "slide", duration_ms: 800,
+                     effect: "none", effect_asset: "", bg_type: "none", bg_color: "#000000", bg_asset: "", bg_fit: "cover",
+                     bg_opacity: 100 };
+  const FONT_SUGGESTIONS = ["Yu Gothic", "Yu Gothic UI", "Meiryo", "BIZ UDPGothic", "BIZ UDGothic", "MS Gothic", "Yu Mincho",
+                            "BIZ UDPMincho", "Segoe UI", "Arial", "Arial Black", "Impact", "Verdana", "Georgia", "Consolas"];
+  const MAX_ASSET_BYTES = 200 * 1024 * 1024;
+  let saved = null, assets = [], demo = 998;
+
+  function show(text, kind) {
+    $("result").textContent = text;
+    $("result").className = kind || "";
+  }
+
+  function reopen() {
+    show("このページは開き直しが必要です。アイコンの右クリックから「見た目を変える」を選んでください。", "bad");
+    $("save").disabled = true;
+  }
+
+  function readForm() {
+    const d = {};
+    for (const key of KEYS) {
+      const el = $(key);
+      d[key] = el.type === "checkbox" ? el.checked : NUMBERS.includes(key) ? Number(el.value) : el.value;
+    }
+    return d;
+  }
+
+  function fillForm(d) {
+    for (const key of KEYS) {
+      const el = $(key);
+      if (el.type === "checkbox") el.checked = d[key];
+      else el.value = d[key];
+    }
+    refresh();
+  }
+
+  // 値の表示、関係する項目だけの表示、プレビューへの反映、未保存の表示
+  function refresh() {
+    for (const out of document.querySelectorAll("output")) {
+      const v = Number($(out.dataset.for).value) * Number(out.dataset.scale || 1);
+      out.textContent = `${Number.isInteger(v) ? v : v.toFixed(1)}${out.dataset.unit || ""}`;
+    }
+    for (const el of document.querySelectorAll("[data-show]")) {
+      const [key, values] = el.dataset.show.split("=");
+      el.hidden = !values.split(",").includes($(key).value);
+    }
+    const d = readForm();
+    if (saved) $("screen").contentWindow.postMessage({ type: "design", design: d }, location.origin);
+    if (saved && JSON.stringify(d) !== JSON.stringify(saved)) show("保存していない変更があります");
+    else if ($("result").textContent === "保存していない変更があります") show("");
+  }
+
+  function sendCount() {
+    $("screen").contentWindow.postMessage({ type: "count", count: demo }, location.origin);
+  }
+
+  // プレビューの準備と保存済みの見た目の読み込みが、両方そろったら表示する
+  let previewReady = false;
+  function startPreview() {
+    if (!previewReady || !saved) return;
+    refresh();
+    sendCount();
+  }
+
+  addEventListener("message", (e) => {
+    if (e.origin === location.origin && e.data.type === "ready") {
+      previewReady = true;
+      startPreview();
+    }
+  });
+
+  for (const button of document.querySelectorAll("[data-step]")) {
+    button.addEventListener("click", () => {
+      demo = Math.max(0, demo + Number(button.dataset.step));
+      sendCount();
+    });
+  }
+
+  $("form").addEventListener("input", refresh);
+  $("form").addEventListener("change", refresh);
+
+  function formatSize(bytes) {
+    return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.ceil(bytes / 1024)}KB`;
+  }
+
+  function renderAssets() {
+    for (const select of document.querySelectorAll("select[data-kinds]")) {
+      const kinds = select.dataset.kinds.split(" ");
+      const current = select.value;
+      const options = [new Option("なし", "")];
+      for (const a of assets.filter((a) => kinds.includes(a.kind))) options.push(new Option(a.name, a.name));
+      select.replaceChildren(...options);
+      select.value = options.some((o) => o.value === current) ? current : "";
+    }
+    const KIND_LABELS = { image: "画像", video: "動画", font: "フォント" };
+    $("assets").replaceChildren(...assets.map((a) => {
+      const li = document.createElement("li");
+      const name = document.createElement("span");
+      name.textContent = a.name;
+      name.title = a.name;
+      const info = document.createElement("span");
+      info.className = "sub";
+      info.textContent = `${KIND_LABELS[a.kind]}・${formatSize(a.size)}`;
+      const del = document.createElement("button");
+      del.type = "button";
+      del.textContent = "削除";
+      del.addEventListener("click", () => removeAsset(a.name));
+      li.append(name, info, del);
+      return li;
+    }));
+    $("no-assets").hidden = assets.length > 0;
+  }
+
+  async function loadAssets() {
+    const res = await fetch("/api/assets", { headers });
+    if (!res.ok) return reopen();
+    assets = await res.json();
+    renderAssets();
+  }
+
+  // サーバーが受け付けない記号は「_」に置き換える
+  function safeName(name) {
+    name = name.normalize("NFC").replace(/[^\p{L}\p{N}_\-. ()（）]/gu, "_").replace(/^[. ]+|[. ]+$/g, "");
+    const dot = name.lastIndexOf(".");
+    const ext = dot > 0 ? name.slice(dot) : "";
+    return name.slice(0, 120 - ext.length).replace(/\.[^.]*$/, "") + ext;
+  }
+
+  let uploadTarget = null;
+  for (const button of document.querySelectorAll("[data-upload]")) {
+    button.addEventListener("click", () => {
+      uploadTarget = button.dataset.upload;
+      $("file").accept = button.dataset.accept;
+      $("file").value = "";
+      $("file").click();
+    });
+  }
+
+  $("file").addEventListener("change", async () => {
+    const file = $("file").files[0];
+    if (!file) return;
+    if (file.size > MAX_ASSET_BYTES) return show("ファイルが大きすぎます（200MB まで）", "bad");
+    const name = safeName(file.name);
+    if (assets.some((a) => a.name === name) && !confirm(`「${name}」はすでにあります。置き換えますか？`)) return;
+    show(`「${name}」を追加しています…`);
+    try {
+      const res = await fetch(`/api/assets?name=${encodeURIComponent(name)}`, {
+        method: "POST", headers: { ...headers, "Content-Type": "application/octet-stream" }, body: file,
+      });
+      if (res.status === 403) return reopen();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return show(data.error || "追加できませんでした", "bad");
+      assets = data.assets;
+      renderAssets();
+      $(uploadTarget).value = name;
+      refresh();
+      show(`「${name}」を追加しました。気に入ったら保存してください`, "ok");
+    } catch {
+      show("ソフトと通信できませんでした。起動しているか確認してください。", "bad");
+    }
+  });
+
+  async function removeAsset(name) {
+    if (!confirm(`「${name}」を削除しますか？使っている設定は「なし」に戻ります。`)) return;
+    const res = await fetch(`/api/assets?name=${encodeURIComponent(name)}`, { method: "DELETE", headers });
+    if (res.status === 403) return reopen();
+    // 保存済みの見た目からも外れるので、読み直す
+    saved = await (await fetch("/api/design")).json();
+    await loadAssets();   // 消したファイルを選んでいた項目は「なし」になる
+    if ($("bg_type").value === "asset" && !$("bg_asset").value) $("bg_type").value = "none";
+    if ($("effect").value === "asset" && !$("effect_asset").value) $("effect").value = "none";
+    refresh();
+    show(`「${name}」を削除しました`, "ok");
+  }
+
+  $("save").addEventListener("click", async () => {
+    $("save").disabled = true;
+    try {
+      const d = readForm();
+      const res = await fetch("/api/design", {
+        method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(d),
+      });
+      if (res.status === 403) return reopen();
+      const data = await res.json();
+      if (!res.ok) {
+        show(data.error || "保存できませんでした", "bad");
+      } else {
+        saved = d;
+        show("保存しました。OBS の画面にも反映されます。", "ok");
+      }
+    } catch {
+      show("ソフトと通信できませんでした。起動しているか確認してください。", "bad");
+    }
+    $("save").disabled = false;
+  });
+
+  $("revert").addEventListener("click", () => saved && fillForm(saved));
+  $("defaults").addEventListener("click", () => fillForm(DEFAULTS));
+
+  // 対応しているブラウザーでは、パソコンのフォントの一覧を候補にできる
+  function setFontSuggestions(names) {
+    $("font-list").replaceChildren(...[...new Set(names)].map((n) => new Option(n)));
+  }
+  setFontSuggestions(FONT_SUGGESTIONS);
+  if ("queryLocalFonts" in window) {
+    $("load-fonts").hidden = false;
+    $("load-fonts").addEventListener("click", async () => {
+      try {
+        const fonts = await queryLocalFonts();
+        setFontSuggestions(fonts.map((f) => f.family).sort((a, b) => a.localeCompare(b, "ja")));
+        show(`${$("font-list").options.length} 個のフォントを候補にしました`, "ok");
+      } catch {
+        show("フォントの一覧を読み込めませんでした。名前を直接入力してください。", "bad");
+      }
+    });
+  }
+
+  (async () => {
+    await loadAssets();
+    saved = await (await fetch("/api/design")).json();
+    fillForm(saved);
+    startPreview();
+  })();
+</script>
+</body>
+</html>

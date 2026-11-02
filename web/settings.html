@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>初期設定 - 登録者数カウンター</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f5f6f8; --card: #fff; --text: #1a1c20; --sub: #5a606b; --line: #d8dbe0;
+          --accent: #2563eb; --ok: #15803d; --bad: #b91c1c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #16181c; --card: #22252b; --text: #eceef1; --sub: #a4aab4; --line: #3a3e46;
+            --accent: #6d9cff; --ok: #4ade80; --bad: #f87171; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.7 system-ui, "Yu Gothic UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 8px; }
+  p { margin: 0 0 8px; }
+  .sub { color: var(--sub); font-size: 14px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 16px; }
+  ol { margin: 0 0 12px; padding-left: 1.4em; }
+  a { color: var(--accent); }
+  label { display: block; font-weight: 600; margin-bottom: 4px; }
+  input[type=text], input[type=password] { width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px;
+    border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; }
+  .check { display: flex; gap: 8px; font-weight: 400; align-items: flex-start; }
+  .check input { margin-top: 7px; }
+  button { padding: 10px 24px; font-size: 16px; font-weight: 600; border: 0; border-radius: 6px;
+           background: var(--accent); color: #fff; cursor: pointer; margin-top: 16px; }
+  button:disabled { opacity: .5; cursor: default; }
+  #result { margin-top: 12px; font-weight: 600; min-height: 1.7em; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  code { user-select: all; }
+</style>
+</head>
+<body>
+<main>
+  <h1>初期設定</h1>
+  <p class="sub">このソフトは YouTube API Services を使って登録者数を取得します。入力した内容はこのパソコンの中にだけ保存します。</p>
+
+  <form id="form">
+    <section>
+      <h2>1. 利用規約とプライバシー</h2>
+      <label class="check"><input type="checkbox" id="terms">
+        <span><a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">YouTube 利用規約</a>、
+        <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google プライバシー ポリシー</a>、
+        <a href="/privacy" target="_blank">このソフトのプライバシーポリシー</a>に同意します</span></label>
+    </section>
+
+    <section>
+      <h2>2. API キー</h2>
+      <ol>
+        <li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noreferrer">Google Cloud でプロジェクトを作る</a>（名前は自由です）</li>
+        <li><a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noreferrer">YouTube Data API v3 のページ</a>で「有効にする」を押す</li>
+        <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">認証情報のページ</a>で「認証情報を作成」→「API キー」を選ぶ</li>
+        <li>「API の制限」で YouTube Data API v3 だけを許可する</li>
+        <li>できたキーをコピーして、下に貼り付ける</li>
+      </ol>
+      <label for="key">API キー</label>
+      <input type="password" id="key" autocomplete="off" spellcheck="false">
+      <p class="sub" id="key-note">API キーはパスワードと同じです。人に教えたり、配信に映したりしないでください。</p>
+    </section>
+
+    <section>
+      <h2>3. チャンネル</h2>
+      <p>次のどれかを貼り付けてください。</p>
+      <ul>
+        <li>ハンドル（例：<code>@yourname</code>）</li>
+        <li>チャンネルページの URL</li>
+        <li><a href="https://www.youtube.com/account_advanced" target="_blank" rel="noreferrer">チャンネル ID</a>（UC で始まる 24 文字）</li>
+      </ul>
+      <label for="channel">チャンネル</label>
+      <input type="text" id="channel" autocomplete="off" spellcheck="false">
+    </section>
+
+    <button type="submit" id="save">保存して確認する</button>
+    <div id="result" role="status"></div>
+  </form>
+
+  <section id="done" hidden>
+    <h2>OBS に追加する</h2>
+    <p>OBS の「ソース」の「+」→「ブラウザ」を選び、URL に次を入力します。</p>
+    <p><code id="obs-url"></code></p>
+    <p><a id="design-link" href="/design">文字や背景、アニメーションを変える</a></p>
+    <p class="sub">この画面は閉じてかまいません。</p>
+  </section>
+</main>
+<script>
+  const token = new URLSearchParams(location.search).get("token") || "";
+  // 履歴などに残さないよう、読み取ったら URL からトークンを消す
+  history.replaceState(null, "", location.pathname);
+  const $ = (id) => document.getElementById(id);
+  const headers = { "X-Settings-Token": token };
+  $("obs-url").textContent = `${location.origin}/`;
+  $("design-link").href = `/design?token=${encodeURIComponent(token)}`;
+
+  function show(text, kind) {
+    $("result").textContent = text;
+    $("result").className = kind || "";
+  }
+
+  async function load() {
+    const res = await fetch("/api/settings", { headers });
+    if (!res.ok) {
+      show("このページは開き直しが必要です。アイコンの右クリックから「設定を開く」を選んでください。", "bad");
+      $("save").disabled = true;
+      return;
+    }
+    const data = await res.json();
+    $("terms").checked = data.terms_accepted;
+    $("channel").value = data.channel_id;
+    if (data.has_key) $("key").placeholder = "保存済み（変更するときだけ入力）";
+  }
+
+  async function waitForResult(startedAt) {
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      const s = await (await fetch("/api/count")).json();
+      if (s.status === "ok" && s.updated_at >= startedAt) {
+        show(`確認できました。登録者数：${s.count}`, "ok");
+        $("done").hidden = false;
+        return;
+      }
+      if (s.status !== "ok" && s.status !== "starting" && s.detail) {
+        show(s.detail, "bad");
+        return;
+      }
+    }
+    show("確認に時間がかかっています。アイコンのメニューで状態を確認してください。", "bad");
+  }
+
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("save").disabled = true;
+    $("done").hidden = true;
+    show("確認しています…");
+    const startedAt = Date.now() / 1000;
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ terms_accepted: $("terms").checked, api_key: $("key").value, channel: $("channel").value }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        show(data.error || "保存できませんでした", "bad");
+      } else {
+        $("key").value = "";
+        await load();
+        await waitForResult(startedAt);
+      }
+    } catch {
+      show("ソフトと通信できませんでした。起動しているか確認してください。", "bad");
+    }
+    $("save").disabled = false;
+  });
+
+  load();
+</script>
+</body>
+</html>
