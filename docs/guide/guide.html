@@ -81,6 +81,12 @@
   .obs .field { background: #12141a; border: 1px solid #4b5060; border-radius: 3px; padding: 2px 6px; font-family: Consolas, monospace; }
   .obs .menu { background: #3a3e4b; border-color: #555b6b; color: #dfe3ea; }
   .obs .menu .on { background: #4a5ae8; }
+  /* Google Cloud のボタンの見本（名前を目印にしてもらう） */
+  .gbtn { display: inline-block; background: #1a73e8; color: #fff; font-weight: 700; font-size: 9.5pt; padding: 1px 12px;
+          border-radius: 4px; border: 1px solid #1a73e8; margin: 0 3px; white-space: nowrap; }
+  .gbtn.o { background: #fff; color: #1a73e8; border-color: #9fbff2; }
+  .glink { color: #1a73e8; text-decoration: underline; font-weight: 700; margin: 0 2px; }
+  .menu .dim { color: #8b919b; }
   .frames { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-items: center; width: 78%; margin: 0 auto; }
   .kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; margin: 8px 0; font-size: 9.5pt; }
   .kinds b { display: inline-block; min-width: 8.5em; }
@@ -216,7 +222,7 @@
 <section class="page">
   <h2><span class="step">3</span>初期設定をする<span class="sub" style="font-weight:500">（最初の 1 回だけ）</span></h2>
   <p class="lead">ブラウザーに開いた「初期設定」の画面に、上から順に入力します。</p>
-  <div class="grid2" style="grid-template-columns: 1.05fr 1fr">
+  <div class="grid2" style="grid-template-columns: .85fr 1fr">
     <figure class="shot" style="margin:0"><img src="img/settings.png" alt="初期設定の画面"></figure>
     <div>
       <ol class="steps">
@@ -234,34 +240,132 @@
     </div>
   </div>
   <h3>うまくいくと</h3>
-  <figure class="shot" style="width:72%;margin-left:auto;margin-right:auto"><img src="img/settings_done.png" alt="確認できた画面"></figure>
+  <figure class="shot" style="width:60%;margin-left:auto;margin-right:auto"><img src="img/settings_done.png" alt="確認できた画面"></figure>
   <p>「確認できました。登録者数：○○」と出れば成功です。問題があるときは、ここに理由が表示されるので、その内容を直してもう一度押してください。</p>
 </section>
 
 <section class="page">
-  <h2><span class="step">3</span>API キーの作り方</h2>
-  <p class="lead">API キーは、このツールが YouTube から登録者数を受け取るための「合鍵」です。無料で作れます。
-    初期設定の画面にある青いリンクから、それぞれのページを直接開けます。</p>
-  <ol class="steps blue">
-    <li><b>Google Cloud でプロジェクトを作る</b><br>
-      画面の「Google Cloud でプロジェクトを作る」のリンクを開きます。初めての場合は利用規約への同意を求められます。
-      プロジェクト名は自由です（例：<code>sub-counter</code>）。「作成」を押します。</li>
-    <li><b>YouTube Data API v3 を有効にする</b><br>
-      「YouTube Data API v3 のページ」のリンクを開き、<b>「有効にする」</b>を押します。
-      <span class="sub">画面上部のプロジェクト名が、1 で作ったものになっているか確認してください。</span></li>
-    <li><b>API キーを作る</b><br>
-      「認証情報のページ」のリンクを開き、<b>「＋ 認証情報を作成」→「API キー」</b>を選びます。</li>
-    <li><b>キーを制限する（おすすめ）</b><br>
-      作ったキーの編集画面の「API の制限」で<b>「キーを制限」</b>を選び、<b>YouTube Data API v3</b> だけにチェックを入れて保存します。
-      万一キーが漏れても、ほかの用途に使われにくくなります。</li>
-    <li><b>キーをコピーして貼り付ける</b><br>
-      表示されたキー（英数字の長い文字列）をコピーし、初期設定の画面の「API キー」に貼り付けます。</li>
+  <h2><span class="step">3</span>API キーの作り方（全体の流れ）</h2>
+  <p class="lead">API キーは、このツールが YouTube から登録者数を受け取るための「合鍵」です。
+    Google Cloud（グーグル クラウド）という Google のサイトで、<b>無料</b>で作れます。ここがいちばん難しいところなので、1 つずつ進めましょう。</p>
+
+  <div class="row" style="margin:4px 0 14px;align-items:stretch">
+    <div class="box info" style="flex:1;margin:0"><b>A</b>規約に同意<br><span class="sub">初回だけ</span></div><span class="arrow">›</span>
+    <div class="box info" style="flex:1;margin:0"><b>B</b>プロジェクト作成</div><span class="arrow">›</span>
+    <div class="box info" style="flex:1;margin:0"><b>C</b>API を有効化</div><span class="arrow">›</span>
+    <div class="box info" style="flex:1;margin:0"><b>D</b>キーを作る</div><span class="arrow">›</span>
+    <div class="box ok" style="flex:1;margin:0"><b>E</b>キーを制限<br><span class="sub">おすすめ</span></div>
+  </div>
+
+  <h3>始める前に</h3>
+  <ul>
+    <li><b>パソコンのブラウザー</b>（Chrome や Edge）で進めてください。スマホでは画面が違って迷いやすくなります。</li>
+    <li>使う <b>Google アカウントはどれでも大丈夫</b>です。YouTube のチャンネルと同じアカウントでなくてもかまいません。</li>
+    <li>かかる時間は 10 分ほどです。</li>
+    <li>初期設定の画面にある<b>青いリンク</b>から開くと、目的のページに直接行けるので迷いにくくなります。</li>
+  </ul>
+
+  <div class="box ok"><b>お金はかかりません</b>このツールは 1 分に 1 回だけ数字を確認するので、1 日中動かしても 1 日の無料枠（10,000 回）の 15% ほどしか使いません。<br>
+    途中で<b>「無料トライアル」「請求先アカウント」「クレジットカード」</b>などの案内が出ても、このツールには<b>必要ありません</b>。右上の「×」や「閉じる」で閉じて進めてください。</div>
+
+  <h3>この説明書の見方</h3>
+  <p>押すボタンは、次のような<b>見本</b>で示します。Google Cloud の画面は時々デザインが変わるので、<b>ボタンの名前を目印</b>にしてください。</p>
+  <div class="row" style="gap:16px;flex-wrap:wrap">
+    <span class="gbtn">青いボタン</span><span class="gbtn o">枠だけのボタン</span><span class="glink">青い文字のリンク</span>
+  </div>
+</section>
+
+<section class="page">
+  <h2><span class="step">3</span>手順 A・B　利用規約とプロジェクト</h2>
+
+  <h3>A. 利用規約に同意する（初めて Google Cloud を使う人だけ）</h3>
+  <p>初期設定の画面の<span class="glink">Google Cloud でプロジェクトを作る</span>を押すと、Google Cloud が開きます。初めての場合は、最初に次のような確認が出ます。</p>
+  <ol class="steps">
+    <li><b>「国」</b>で<b>「日本」</b>を選びます。</li>
+    <li><b>利用規約に同意する</b>チェックを入れます。お知らせメールの受け取りを聞かれたら「いいえ」で大丈夫です。</li>
+    <li><span class="gbtn">同意して続行</span>を押します。</li>
   </ol>
-  <div class="box info"><b>無料枠の範囲で使えます</b>このツールは 1 分に 1 回だけ数字を確認するので、
-    1 日中動かしても 1 日の無料枠（10,000 回）の 15% ほどしか使いません。</div>
-  <div class="box warn"><b>「YouTube Data API v3」が見つからないとき</b>
-    Google Cloud の画面上部の検索欄に「YouTube Data API v3」と入力して探してください。
-    「有効にする」ではなく「管理」と出ていれば、すでに有効になっています。</div>
+  <p class="sub">この確認が出なければ、すでに同意済みです。そのまま B に進んでください。</p>
+
+  <h3>B. プロジェクトを作る</h3>
+  <p>「プロジェクト」は、API キーを入れておく箱のようなものです。</p>
+  <ol class="steps">
+    <li><b>「新しいプロジェクト」</b>の画面が開きます（開かないときは、初期設定の画面のリンクをもう一度押します）。</li>
+    <li><b>「プロジェクト名」</b>に好きな名前を入れます。<b>半角の英字</b>がおすすめです（例：<code>sub-counter</code>）。</li>
+    <li><b>「場所」</b>は<b>「組織なし」</b>のままで大丈夫です。</li>
+    <li><span class="gbtn">作成</span>を押します。</li>
+    <li>作り終わるまで <b>30 秒ほど</b>待ちます。右上のベルのマークに「プロジェクトを作成」と出れば完了です。</li>
+  </ol>
+
+  <div class="box warn"><b>ここが大事：画面の左上を確認</b>
+    画面の左上（Google Cloud のロゴの右）に、<b>今使っているプロジェクトの名前</b>が出ています。
+    ここが今作った名前（例：sub-counter）になっているか確認してください。違う名前のときは、そこを押して一覧から選び直します。
+    <b>このあとの C・D は、必ずこのプロジェクトで行います。</b></div>
+</section>
+
+<section class="page">
+  <h2><span class="step">3</span>手順 C・D　API を有効にして、キーを作る</h2>
+
+  <h3>C. YouTube Data API v3 を有効にする</h3>
+  <ol class="steps">
+    <li>初期設定の画面の<span class="glink">YouTube Data API v3 のページ</span>を押します。</li>
+    <li>画面の左上が、B で作った<b>プロジェクト名</b>になっているか確認します。</li>
+    <li><span class="gbtn">有効にする</span>を押します。</li>
+    <li>数秒で画面が切り替われば完了です。<span class="gbtn o">管理</span>と出ている場合は、すでに有効になっています。</li>
+  </ol>
+  <div class="box warn"><b>名前の似たものに注意</b>
+    「YouTube Analytics API」「YouTube Reporting API」は別のものです。必ず<b>「YouTube Data API v3」</b>を有効にしてください。</div>
+
+  <h3>D. API キーを作ってコピーする</h3>
+  <div class="grid2" style="grid-template-columns:1.25fr 1fr">
+    <ol class="steps">
+      <li>初期設定の画面の<span class="glink">認証情報のページ</span>を押します。</li>
+      <li>画面上の<span class="gbtn o">＋ 認証情報を作成</span>を押します。</li>
+      <li>出てきたメニューから<b>「API キー」</b>を選びます。</li>
+      <li>「API キーを作成しました」などの画面に、<b>「AIza」で始まる文字列</b>が出ます。これが API キーです。</li>
+      <li>横の<b>コピーのマーク</b>（四角が 2 つ重なった形）を押してコピーし、初期設定の画面の「API キー」に<b>貼り付け</b>ます（右クリック→「貼り付け」、または Ctrl＋V）。</li>
+    </ol>
+    <div>
+      <div class="mock"><div class="title">見本<span class="tag">③ で出るメニュー</span></div>
+        <div class="menu" style="width:100%"><div class="on hl">API キー</div><div class="dim">OAuth クライアント ID</div><div class="dim">サービス アカウント</div></div>
+        <p class="sub" style="margin:8px 0 0">「OAuth クライアント ID」「サービス アカウント」は<b>選びません</b>。</p>
+      </div>
+      <div class="mock" style="margin-top:10px"><div class="title">見本<span class="tag">API キーの形</span></div>
+        <code style="font-size:10pt">AIzaSy…（全部で 39 文字）</code>
+        <p class="sub" style="margin:6px 0 0">「AIza」で始まらないものは API キーではありません（プロジェクト ID や、「.apps.googleusercontent.com」で終わるクライアント ID など）。</p>
+      </div>
+    </div>
+  </div>
+  <div class="box info"><b>別の画面が出たとき</b>
+    「どの API を使用していますか？」と聞かれる画面になった場合は、<b>「YouTube Data API v3」</b>を選び、
+    アクセスするデータは<b>「一般公開データ」</b>を選んで「次へ」を押してください。同じように API キーが作られます。</div>
+</section>
+
+<section class="page">
+  <h2><span class="step">3</span>手順 E　キーを制限する（おすすめ）・うまくいかないとき</h2>
+
+  <h3>E. キーを制限する（おすすめ）</h3>
+  <p>万一キーが人に知られても、ほかの用途に使われにくくするための設定です。やらなくてもツールは動きます。</p>
+  <ol class="steps">
+    <li>認証情報のページの「API キー」の一覧で、作ったキーの<b>名前</b>（例：「API キー 1」）を押します。</li>
+    <li><b>「アプリケーションの制限」は「なし」のまま</b>にします。<span class="sub">ここを変えると、このツールから使えなくなります。</span></li>
+    <li><b>「API の制限」</b>で<b>「キーを制限」</b>を選びます。</li>
+    <li>出てきた一覧で<b>「YouTube Data API v3」</b>にチェックを入れ、<span class="gbtn o">OK</span>を押します。</li>
+    <li>一番下の<span class="gbtn">保存</span>を押します。反映されるまで数分かかることがあります。</li>
+  </ol>
+
+  <h3>うまくいかないとき</h3>
+  <p>初期設定の画面で「保存して確認する」を押したときに出るメッセージごとの直し方です。</p>
+  <table>
+    <tr><th style="width:40%">出たメッセージ</th><th>直し方</th></tr>
+    <tr><td>API キーを確認してください</td><td>キーをコピーし直して貼り付けます。「AIza」で始まっているか、前後に空白が入っていないか確認します。</td></tr>
+    <tr><td>YouTube Data API v3 が有効になっていません</td><td>手順 C をやり直します。<b>キーを作ったプロジェクトと同じプロジェクト</b>で有効にしたか、画面の左上を確認してください。</td></tr>
+    <tr><td>「アプリケーションの制限」が原因で使えません</td><td>手順 E の 2 のとおり、「アプリケーションの制限」を「なし」にして保存します。</td></tr>
+    <tr><td>「API の制限」に YouTube Data API v3 が入っていません</td><td>手順 E の 4 のとおり、一覧で「YouTube Data API v3」にチェックを入れて保存します。</td></tr>
+    <tr><td>作ったばかりなのにうまくいかない</td><td>キーや設定の反映に数分かかることがあります。5 分ほど待ってから、もう一度押してください。</td></tr>
+  </table>
+  <div class="box info"><b>それでも分からないとき</b>どの画面で止まったかを書いて、最後のページの「お問い合わせ」から聞いてください。
+    <b>API キーそのものは書かないでください。</b></div>
 </section>
 
 <!-- 4 -->
@@ -459,7 +563,7 @@
     <dd>① 画面右下に青いアイコンがあるか（なければ exe を起動）、② OBS の URL が <code>http://localhost:8765/</code> になっているか、
       ③ OBS のソース一覧で目のマークが消えていないか、を確認してください。</dd>
     <dt>「YouTube Data API v3 が有効になっていません」と出た</dt>
-    <dd>「API キーの作り方」の 2 をやり直し、そのあとアイコンのメニューから「今すぐ取得し直す」を選びます。</dd>
+    <dd>「API キーの作り方」の手順 C をやり直し、そのあとアイコンのメニューから「今すぐ取得し直す」を選びます。</dd>
     <dt>「登録者数が非公開になっています」と出た</dt>
     <dd>YouTube Studio の設定で登録者数を公開にしてから、「今すぐ取得し直す」を選びます。</dd>
     <dt>「API の 1 日の上限に達しました」と出た</dt>

@@ -49,15 +49,17 @@
 
     <section>
       <h2>2. API キー</h2>
+      <p class="sub">無料で作れます。お金はかからず、クレジットカードの登録や「無料トライアル」も必要ありません。</p>
       <ol>
-        <li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noreferrer">Google Cloud でプロジェクトを作る</a>（名前は自由です）</li>
-        <li><a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noreferrer">YouTube Data API v3 のページ</a>で「有効にする」を押す</li>
-        <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">認証情報のページ</a>で「認証情報を作成」→「API キー」を選ぶ</li>
-        <li>「API の制限」で YouTube Data API v3 だけを許可する</li>
-        <li>できたキーをコピーして、下に貼り付ける</li>
+        <li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noreferrer">Google Cloud でプロジェクトを作る</a>（名前は自由。初めてのときは国と利用規約の確認が出ます）</li>
+        <li><a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noreferrer">YouTube Data API v3 のページ</a>で「有効にする」を押す（画面上のプロジェクト名が 1 で作ったものか確認）</li>
+        <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">認証情報のページ</a>で「＋ 認証情報を作成」→「API キー」を選ぶ</li>
+        <li>表示された「AIza」で始まるキーをコピーして、下に貼り付ける</li>
       </ol>
+      <p class="sub">画面ごとの詳しい手順は、同梱の「導入ガイド.pdf」の「API キーの作り方」に載っています。</p>
       <label for="key">API キー</label>
       <input type="password" id="key" autocomplete="off" spellcheck="false">
+      <p class="sub bad" id="key-hint" hidden>「AIza」で始まっていません。プロジェクト ID やクライアント ID ではなく、API キーをコピーしたか確認してください。</p>
       <p class="sub" id="key-note">API キーはパスワードと同じです。人に教えたり、配信に映したりしないでください。</p>
     </section>
 
@@ -128,6 +130,12 @@
     }
     show("確認に時間がかかっています。アイコンのメニューで状態を確認してください。", "bad");
   }
+
+  // よくある貼り間違い（プロジェクト ID やクライアント ID）に気づけるようにする。保存は止めない
+  $("key").addEventListener("input", () => {
+    const key = $("key").value.trim();
+    $("key-hint").hidden = !key || key.startsWith("AIza");
+  });
 
   $("form").addEventListener("submit", async (e) => {
     e.preventDefault();

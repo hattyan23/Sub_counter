@@ -40,6 +40,9 @@ RATE_LIMIT_REASONS = {"rateLimitExceeded", "userRateLimitExceeded"}
 API_DISABLED_REASONS = {"accessNotConfigured", "SERVICE_DISABLED"}
 KEY_REASONS = {"keyInvalid", "keyExpired", "forbidden", "ipRefererBlocked", "API_KEY_INVALID", "API_KEY_EXPIRED",
                "API_KEY_SERVICE_BLOCKED", "API_KEY_HTTP_REFERRER_BLOCKED", "API_KEY_IP_ADDRESS_BLOCKED"}
+# キーの作り方でつまずく人が多いので、原因ごとに直し方を案内する
+KEY_APP_RESTRICTED_REASONS = {"ipRefererBlocked", "API_KEY_HTTP_REFERRER_BLOCKED", "API_KEY_IP_ADDRESS_BLOCKED"}
+KEY_API_RESTRICTED_REASONS = {"API_KEY_SERVICE_BLOCKED"}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -109,8 +112,15 @@ def classify_http_error(code, reason):
     if reason in API_DISABLED_REASONS:
         return FetchResult(KEY_INVALID, detail="YouTube Data API v3 が有効になっていません。"
                                                "有効にしたら「今すぐ取得し直す」を選んでください")
+    if reason in KEY_APP_RESTRICTED_REASONS:
+        return FetchResult(KEY_INVALID, detail="API キーの「アプリケーションの制限」が原因で使えません。"
+                                               f"Google Cloud でキーを開き、「なし」にしてください（{reason}）")
+    if reason in KEY_API_RESTRICTED_REASONS:
+        return FetchResult(KEY_INVALID, detail="API キーの「API の制限」に YouTube Data API v3 が入っていません。"
+                                               f"キーの設定でチェックを入れてください（{reason}）")
     if reason in KEY_REASONS:
-        return FetchResult(KEY_INVALID, detail=f"API キーを確認してください（{reason}）")
+        return FetchResult(KEY_INVALID, detail="API キーを確認してください。「AIza」で始まるキーを、"
+                                               f"前後に空白を入れずに貼り付けてください（{reason}）")
     # プロキシや一時的な応答の可能性があるので、設定の問題とは決めつけず再試行する
     return FetchResult(ERROR, detail=f"API のエラー（HTTP {code} {reason}）".replace(" ）", "）"))
 

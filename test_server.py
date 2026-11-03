@@ -249,6 +249,13 @@ class FetcherTest(TempConfig):
         self.assertEqual(result.status, fetcher.KEY_INVALID)
         self.assertIn("API_KEY_INVALID", result.detail)
 
+    def test_key_problems_explain_how_to_fix(self):
+        for reason, text in [("API_KEY_HTTP_REFERRER_BLOCKED", "アプリケーションの制限"), ("ipRefererBlocked", "アプリケーションの制限"),
+                             ("API_KEY_SERVICE_BLOCKED", "API の制限"), ("keyInvalid", "AIza")]:
+            result = fetcher.classify_http_error(403, reason)
+            self.assertEqual(result.status, fetcher.KEY_INVALID, reason)
+            self.assertIn(text, result.detail, reason)
+
     def test_unknown_4xx_is_retried_not_treated_as_key_problem(self):
         for code, body in [(403, b"<html>proxy</html>"), (407, b""), (400, {"error": {"errors": [{"reason": "badRequest"}]}})]:
             self.assertEqual(self.fetch(code, body).status, fetcher.ERROR, code)
